@@ -1168,110 +1168,132 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Wallet Detail Sheet */}
+      {/* Wallet List Sheet - TokenPocket Style Dark Popup */}
       <Sheet open={walletDetailOpen} onOpenChange={setWalletDetailOpen}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl p-0">
-          <SheetTitle className="sr-only">Wallet Details</SheetTitle>
+        <SheetContent 
+          side="bottom" 
+          className="h-[70vh] rounded-t-3xl p-0 bg-zinc-900 border-zinc-800"
+        >
+          <SheetTitle className="sr-only">Wallet List</SheetTitle>
           {selectedWalletChain && (
             <div className="h-full flex flex-col">
-              {/* Blue Header */}
-              <div className="bg-blue-600 rounded-t-3xl p-6">
+              {/* Header - Search, Title, Close */}
+              <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-800">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                >
+                  <Search className="h-5 w-5" />
+                </Button>
+                <span className="text-white font-medium text-lg">Wallet List</span>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                  onClick={() => setWalletDetailOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Wallet List Content */}
+              <div className="flex-1 overflow-auto px-4 py-4">
+                {/* Chain Section Header */}
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+                  <span className="text-white font-medium">{selectedWalletChain.chain.name}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full border border-zinc-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Wallet Card - Selected/Highlighted */}
+                <div 
+                  className="bg-orange-500 rounded-xl p-4 cursor-pointer"
+                  onClick={() => {
+                    setWalletDetailOpen(false);
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-medium">
+                        {selectedWalletChain.wallet.label || `${selectedWalletChain.chain.symbol}-HD`}
+                      </span>
+                      <span className="px-1.5 py-0.5 bg-white/20 rounded text-xs text-white font-medium">
+                        HD
+                      </span>
+                    </div>
                     <span className="text-white font-medium">
-                      {selectedWalletChain.wallet.label || `${selectedWalletChain.chain.symbol}-HD`}
+                      {formatBalance(selectedWalletChain.wallet.balance)} {selectedWalletChain.chain.symbol}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-white/70 text-sm font-mono">
+                      {truncateAddress(selectedWalletChain.wallet.address)}
                     </span>
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-white/80 hover:text-white hover:bg-white/10"
-                      onClick={() => {
+                      className="h-5 w-5 text-white/70 hover:text-white hover:bg-white/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
                         navigator.clipboard.writeText(selectedWalletChain.wallet.address);
                         toast({ title: "Copied", description: "Address copied to clipboard" });
                       }}
                     >
-                      <Copy className="h-3.5 w-3.5" />
+                      <Copy className="h-3 w-3" />
                     </Button>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10"
-                    onClick={() => setWalletDetailOpen(false)}
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-3xl font-bold text-white">
-                    {showBalance 
-                      ? formatUSD(calculateUSDValue(selectedWalletChain.wallet.balance, selectedWalletChain.chain.symbol, prices))
-                      : "****"
-                    }
-                  </span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 text-white/80 hover:text-white hover:bg-white/10"
-                    onClick={() => setShowBalance(!showBalance)}
-                  >
-                    {showBalance ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-4 gap-2 p-4 bg-background">
-                <Link href={`/transfer?type=send&chain=${selectedWalletChain.chain.id}`} onClick={() => setWalletDetailOpen(false)}>
-                  <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer">
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                      <ArrowUpRight className="h-5 w-5 text-foreground" />
+                {/* Other wallets on this chain would go here */}
+                {wallets
+                  .filter(w => w.chainId === selectedWalletChain.chain.id && w.address !== selectedWalletChain.wallet.address)
+                  .map(wallet => (
+                    <div 
+                      key={wallet.id}
+                      className="bg-zinc-800 rounded-xl p-4 mt-2 cursor-pointer hover:bg-zinc-700 transition-colors"
+                      onClick={() => {
+                        setSelectedWalletChain({ wallet, chain: selectedWalletChain.chain });
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-medium">
+                            {wallet.label || `${selectedWalletChain.chain.symbol}-HD`}
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-zinc-700 rounded text-xs text-zinc-300 font-medium">
+                            HD
+                          </span>
+                        </div>
+                        <span className="text-white font-medium">
+                          {formatBalance(wallet.balance)} {selectedWalletChain.chain.symbol}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-zinc-400 text-sm font-mono">
+                          {truncateAddress(wallet.address)}
+                        </span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(wallet.address);
+                            toast({ title: "Copied", description: "Address copied to clipboard" });
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                    <span className="text-xs text-foreground">Send</span>
-                  </div>
-                </Link>
-                <Link href={`/transfer?type=receive&chain=${selectedWalletChain.chain.id}`} onClick={() => setWalletDetailOpen(false)}>
-                  <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer">
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                      <ArrowDownLeft className="h-5 w-5 text-foreground" />
-                    </div>
-                    <span className="text-xs text-foreground">Receive</span>
-                  </div>
-                </Link>
-                <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-muted/50 opacity-50 cursor-not-allowed">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                    <RefreshCw className="h-5 w-5 text-foreground" />
-                  </div>
-                  <span className="text-xs text-foreground">Swap</span>
-                </div>
-                <div className="flex flex-col items-center gap-1 p-3 rounded-xl bg-muted/50 opacity-50 cursor-not-allowed">
-                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                    <Grid className="h-5 w-5 text-foreground" />
-                  </div>
-                  <span className="text-xs text-foreground">More</span>
-                </div>
-              </div>
-
-              {/* Token List */}
-              <div className="flex-1 overflow-auto p-4 space-y-2">
-                <div className="flex items-center gap-4 p-4 rounded-lg bg-card border">
-                  <ChainIcon symbol={selectedWalletChain.chain.symbol} iconColor={selectedWalletChain.chain.iconColor} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium">{selectedWalletChain.chain.name}</h3>
-                    <p className="text-sm text-muted-foreground">{selectedWalletChain.chain.symbol}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">
-                      {showBalance ? formatBalance(selectedWalletChain.wallet.balance) : "****"} {selectedWalletChain.chain.symbol}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {showBalance 
-                        ? formatUSD(calculateUSDValue(selectedWalletChain.wallet.balance, selectedWalletChain.chain.symbol, prices))
-                        : "****"
-                      }
-                    </p>
-                  </div>
-                </div>
+                  ))
+                }
               </div>
             </div>
           )}
