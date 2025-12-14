@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { 
@@ -53,6 +52,8 @@ function SendTab({ chains, wallets, initialChainId }: { chains: Chain[]; wallets
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
 
+  console.log("[SendTab] initialChainId:", initialChainId, "selectedChainId:", selectedChainId, "chains.length:", chains.length);
+
   const selectedChain = chains.find((c) => c.id === selectedChainId);
   const selectedWallet = wallets.find((w) => w.chainId === selectedChainId);
 
@@ -64,9 +65,12 @@ function SendTab({ chains, wallets, initialChainId }: { chains: Chain[]; wallets
 
   // Update selected chain when initialChainId changes (e.g., user clicks different chain's Send button)
   useEffect(() => {
+    console.log("[SendTab useEffect] initialChainId:", initialChainId, "chains.length:", chains.length, "current selectedChainId:", selectedChainId);
     if (initialChainId && chains.find(c => c.id === initialChainId)) {
+      console.log("[SendTab useEffect] Setting selectedChainId to initialChainId:", initialChainId);
       setSelectedChainId(initialChainId);
     } else if (chains.length > 0 && !selectedChainId) {
+      console.log("[SendTab useEffect] Defaulting to first chain:", chains[0].id);
       setSelectedChainId(chains[0].id);
     }
   }, [chains, initialChainId]);
@@ -334,12 +338,54 @@ function ReceiveTab({ chains, wallets, initialChainId }: { chains: Chain[]; wall
 
 export default function Transfer() {
   const { isConnected, isUnlocked, chains, wallets } = useWallet();
-  const [location] = useLocation();
   
-  const searchParams = new URLSearchParams(location.split("?")[1] || "");
-  const defaultTab = searchParams.get("type") === "receive" ? "receive" : "send";
-  const chainParam = searchParams.get("chain") || undefined;
+  // Track URL search string reactively using window events
+  const [searchString, setSearchString] = useState(() => window.location.search);
+  
+  // Listen for URL changes (popstate for back/forward, and custom event for Link navigation)
+  useEffect(() => {
+    const updateSearch = () => {
+      setSearchString(window.location.search);
+    };
+    
+    // popstate fires on back/forward navigation
+    window.addEventListener('popstate', updateSearch);
+    
+    // Check for search string changes on every render (handles Link navigation)
+    updateSearch();
+    
+    return () => {
+      window.removeEventListener('popstate', updateSearch);
+    };
+  }, []);
+  
+  // Also check on any navigation by using an interval briefly or checking regularly
+  // This is needed because wouter's Link doesn't fire popstate
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      if (window.location.search !== searchString) {
+        setSearchString(window.location.search);
+      }
+    }, 100);
+    
+    return () => clearInterval(checkInterval);
+  }, [searchString]);
+  
+  const queryParams = new URLSearchParams(searchString);
+  const defaultTab = queryParams.get("type") === "receive" ? "receive" : "send";
+  const chainParam = queryParams.get("chain") || undefined;
   const [activeTab, setActiveTab] = useState(defaultTab);
+  
+  // Update active tab when query params change
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const typeParam = params.get("type");
+    if (typeParam === "receive" || typeParam === "send") {
+      setActiveTab(typeParam);
+    }
+  }, [searchString]);
+  
+  console.log("[Transfer] chainParam:", chainParam, "search:", searchString);
 
   if (!isConnected || !isUnlocked) {
     return (
