@@ -552,7 +552,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isConnected || !isUnlocked || wallets.length === 0) return;
+    if (wallets.length === 0) return;
     
     const walletAddresses: Record<string, string> = {};
     wallets.forEach(w => {
@@ -587,10 +587,10 @@ export default function Dashboard() {
     fetchTokenBalances();
     const tokenBalanceInterval = setInterval(fetchTokenBalances, 30000);
     return () => clearInterval(tokenBalanceInterval);
-  }, [isConnected, isUnlocked, wallets.length, topAssets.length, enabledAssetIds.size, chains]);
+  }, [wallets.length, topAssets.length, enabledAssetIds.size, chains]);
 
   useEffect(() => {
-    if (!isConnected || !isUnlocked || wallets.length === 0 || customTokens.length === 0) return;
+    if (wallets.length === 0 || customTokens.length === 0) return;
     
     const walletAddresses: Record<string, string> = {};
     wallets.forEach(w => {
@@ -631,15 +631,15 @@ export default function Dashboard() {
     fetchCustomTokenBalances();
     const customTokenBalanceInterval = setInterval(fetchCustomTokenBalances, 30000);
     return () => clearInterval(customTokenBalanceInterval);
-  }, [isConnected, isUnlocked, wallets.length, customTokens.length, chains]);
+  }, [wallets.length, customTokens.length, chains]);
 
   useEffect(() => {
-    if (!isConnected || !isUnlocked || wallets.length === 0) return;
+    if (wallets.length === 0) return;
     const balanceInterval = setInterval(() => {
       refreshBalances();
     }, 5000);
     return () => clearInterval(balanceInterval);
-  }, [isConnected, isUnlocked, wallets.length, refreshBalances]);
+  }, [wallets.length, refreshBalances]);
   
   const displayChains = chains;
   const displayWallets = visibleWallets;
@@ -752,7 +752,7 @@ export default function Dashboard() {
     }
   };
   
-  if (!isConnected || !isUnlocked || !hasWallets) {
+  if (!hasWallets) {
     return (
       <div className="p-4 md:p-6">
         <h1 className="mb-4 md:mb-6 text-2xl md:text-3xl font-bold">Dashboard</h1>
