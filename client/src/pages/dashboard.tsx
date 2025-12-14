@@ -42,7 +42,8 @@ import { fetchPrices, formatUSD, calculateUSDValue, type PriceData } from "@/lib
 import type { Chain, Wallet as WalletType } from "@shared/schema";
 import type { TopAsset } from "@/lib/price-service";
 import { Link } from "wouter";
-import { getTokenBalanceForAsset, isTokenAsset } from "@/lib/blockchain";
+import { getTokenBalanceForAsset, isTokenAsset, getCustomTokenBalance } from "@/lib/blockchain";
+import type { CustomToken } from "@/lib/client-storage";
 
 function formatBalance(balance: string, decimals: number = 18): string {
   const num = parseFloat(balance);
@@ -527,7 +528,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { isConnected, isUnlocked, chains, wallets, refreshBalances, topAssets, enabledAssetIds, isLoadingAssets, refreshTopAssets, createAdditionalWallet, createWalletWithNewSeed, walletMode, isLoading, selectedAccountIndex, setSelectedAccountIndex, availableAccounts, visibleWallets } = useWallet();
+  const { isConnected, isUnlocked, chains, wallets, refreshBalances, topAssets, enabledAssetIds, isLoadingAssets, refreshTopAssets, createAdditionalWallet, createWalletWithNewSeed, walletMode, isLoading, selectedAccountIndex, setSelectedAccountIndex, availableAccounts, visibleWallets, customTokens } = useWallet();
   const { toast } = useToast();
   const [prices, setPrices] = useState<PriceData>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -540,7 +541,8 @@ export default function Dashboard() {
   const [newSeedPhrase, setNewSeedPhrase] = useState("");
   const [seedConfirmed, setSeedConfirmed] = useState(false);
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({});
-  
+  const [customTokenBalances, setCustomTokenBalances] = useState<Record<string, string>>({});
+
   useEffect(() => {
     fetchPrices().then(setPrices);
     const priceInterval = setInterval(() => {
@@ -586,6 +588,50 @@ export default function Dashboard() {
     const tokenBalanceInterval = setInterval(fetchTokenBalances, 30000);
     return () => clearInterval(tokenBalanceInterval);
   }, [isConnected, isUnlocked, wallets.length, topAssets.length, enabledAssetIds.size, chains]);
+
+  useEffect(() => {
+    if (!isConnected || !isUnlocked || wallets.length === 0 || customTokens.length === 0) return;
+    
+    const walletAddresses: Record<string, string> = {};
+    wallets.forEach(w => {
+      const chain = chains.find(c => c.id === w.chainId);
+      if (chain) {
+        walletAddresses[chain.symbol] = w.address;
+      }
+    });
+
+    const fetchCustomTokenBalances = async () => {
+      const balancePromises = customTokens.map(async (token) => {
+        const walletAddress = walletAddresses[token.chainId];
+        if (!walletAddress) return [token.id, "0"] as [string, string];
+        
+        try {
+          const balance = await getCustomTokenBalance(
+            walletAddress,
+            token.contractAddress,
+            token.chainType,
+            token.evmChainId || 0,
+            token.rpcUrl || "",
+            token.decimals
+          );
+          return [token.id, balance] as [string, string];
+        } catch {
+          return [token.id, "0"] as [string, string];
+        }
+      });
+      
+      const results = await Promise.all(balancePromises);
+      const newBalances: Record<string, string> = {};
+      results.forEach(([id, bal]) => {
+        newBalances[id] = bal;
+      });
+      setCustomTokenBalances(newBalances);
+    };
+
+    fetchCustomTokenBalances();
+    const customTokenBalanceInterval = setInterval(fetchCustomTokenBalances, 30000);
+    return () => clearInterval(customTokenBalanceInterval);
+  }, [isConnected, isUnlocked, wallets.length, customTokens.length, chains]);
 
   useEffect(() => {
     if (!isConnected || !isUnlocked || wallets.length === 0) return;
@@ -968,6 +1014,36 @@ export default function Dashboard() {
                   prices={prices}
                   tokenBalance={tokenBalances[asset.id]}
                 />
+              );
+            })}
+            {customTokens.map((token) => {
+              const balance = customTokenBalances[token.id] || "0";
+              const balanceNum = parseFloat(balance);
+              return (
+                <Card key={token.id} className="hover-elevate transition-all h-full" data-testid={`card-custom-token-${token.id}`}>
+                  <CardContent className="p-3 sm:p-4 flex flex-col h-full">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold shrink-0">
+                          {token.symbol.slice(0, 2)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold truncate text-sm">{token.name}</h3>
+                            <Badge variant="outline" className="text-xs shrink-0">Custom</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {token.symbol} on {token.chainId}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-sm">{formatBalance(balance, 4)}</p>
+                        <p className="text-xs text-muted-foreground">{token.symbol}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>

@@ -3,7 +3,7 @@ import type { Chain, Wallet, Transaction, Token } from "@shared/schema";
 import { DEFAULT_CHAINS } from "@shared/schema";
 import { hardwareWallet, type HardwareWalletState, type ConnectionStatus } from "./hardware-wallet";
 import { softWallet, type SoftWalletState } from "./soft-wallet";
-import { clientStorage, type StoredWallet, type StoredTransaction } from "./client-storage";
+import { clientStorage, type StoredWallet, type StoredTransaction, type CustomToken } from "./client-storage";
 import { getUniversalBalance } from "./blockchain";
 import { fetchAllTransactions, type ParsedTransaction } from "./explorer-service";
 import { fetchTopAssets, type TopAsset } from "./price-service";
@@ -61,6 +61,10 @@ interface WalletContextType {
   setSelectedAccountIndex: (index: number) => void;
   availableAccounts: { index: number; label?: string }[];
   visibleWallets: Wallet[];
+  customTokens: CustomToken[];
+  loadCustomTokens: () => Promise<void>;
+  addCustomToken: (token: Omit<CustomToken, 'id' | 'addedAt'>) => Promise<CustomToken>;
+  removeCustomToken: (id: string) => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -93,6 +97,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [softWallets, setSoftWallets] = useState<Wallet[]>([]);
   const [hardWallets, setHardWallets] = useState<Wallet[]>([]);
   const [selectedAccountIndex, setSelectedAccountIndex] = useState<number>(0);
+  const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
 
   // Compute available accounts from wallets (unique account indices with labels)
   const availableAccounts = useMemo(() => {
@@ -1044,6 +1049,40 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     await clientStorage.setEnabledAssets(new Set());
   }, []);
 
+  const loadCustomTokens = useCallback(async () => {
+    try {
+      const tokens = await clientStorage.getCustomTokens();
+      setCustomTokens(tokens);
+    } catch (err) {
+      console.error("Failed to load custom tokens:", err);
+    }
+  }, []);
+
+  const addCustomToken = useCallback(async (token: Omit<CustomToken, 'id' | 'addedAt'>): Promise<CustomToken> => {
+    const newToken = await clientStorage.addCustomToken(token);
+    setCustomTokens(prev => {
+      const existingIndex = prev.findIndex(t => t.id === newToken.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = newToken;
+        return updated;
+      }
+      return [...prev, newToken];
+    });
+    return newToken;
+  }, []);
+
+  const removeCustomToken = useCallback(async (id: string): Promise<void> => {
+    await clientStorage.removeCustomToken(id);
+    setCustomTokens(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (storageInitialized) {
+      loadCustomTokens();
+    }
+  }, [storageInitialized, loadCustomTokens]);
+
   const createAdditionalWallet = useCallback(async (label?: string) => {
     // Check unlock status based on wallet mode
     if (walletMode === "soft_wallet") {
@@ -1311,6 +1350,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setSelectedAccountIndex,
         availableAccounts,
         visibleWallets,
+        customTokens,
+        loadCustomTokens,
+        addCustomToken,
+        removeCustomToken,
       }}
     >
       {children}

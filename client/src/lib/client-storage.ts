@@ -47,6 +47,19 @@ export interface WalletProfile {
   lastAccessed: string;
 }
 
+export interface CustomToken {
+  id: string;
+  chainId: string;
+  chainType: 'evm' | 'tron';
+  contractAddress: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  evmChainId?: number;
+  rpcUrl?: string;
+  addedAt: string;
+}
+
 class ClientStorage {
   private db: IDBDatabase | null = null;
 
@@ -423,6 +436,48 @@ class ClientStorage {
 
   async clearAllWalletSeeds(): Promise<void> {
     await this.deleteSetting(this.WALLET_SEEDS_KEY);
+  }
+
+  // Custom token management
+  private readonly CUSTOM_TOKENS_KEY = "customTokens";
+
+  async getCustomTokens(): Promise<CustomToken[]> {
+    const stored = await this.getSetting<CustomToken[]>(this.CUSTOM_TOKENS_KEY);
+    return stored || [];
+  }
+
+  async addCustomToken(token: Omit<CustomToken, 'id' | 'addedAt'>): Promise<CustomToken> {
+    const tokens = await this.getCustomTokens();
+    const newToken: CustomToken = {
+      ...token,
+      id: `custom-${token.chainId}-${token.contractAddress.toLowerCase()}`,
+      addedAt: new Date().toISOString(),
+    };
+    
+    const existingIndex = tokens.findIndex(t => t.id === newToken.id);
+    if (existingIndex >= 0) {
+      tokens[existingIndex] = newToken;
+    } else {
+      tokens.push(newToken);
+    }
+    
+    await this.saveSetting(this.CUSTOM_TOKENS_KEY, tokens);
+    return newToken;
+  }
+
+  async removeCustomToken(id: string): Promise<void> {
+    const tokens = await this.getCustomTokens();
+    const filtered = tokens.filter(t => t.id !== id);
+    await this.saveSetting(this.CUSTOM_TOKENS_KEY, filtered);
+  }
+
+  async getCustomToken(id: string): Promise<CustomToken | null> {
+    const tokens = await this.getCustomTokens();
+    return tokens.find(t => t.id === id) || null;
+  }
+
+  async clearAllCustomTokens(): Promise<void> {
+    await this.deleteSetting(this.CUSTOM_TOKENS_KEY);
   }
 }
 

@@ -454,3 +454,19 @@ export function getTokenParentChain(coingeckoId: string): string | null {
   const tokenInfo = COINGECKO_TO_TOKEN_KEY[coingeckoId];
   return tokenInfo?.parentChainSymbol || null;
 }
+
+// Get balance for a custom token
+export async function getCustomTokenBalance(
+  walletAddress: string,
+  contractAddress: string,
+  chainType: 'evm' | 'tron',
+  evmChainId: number,
+  rpcUrl: string,
+  decimals: number
+): Promise<string> {
+  if (chainType === 'tron') {
+    return await getTrc20TokenBalance(walletAddress, contractAddress, decimals);
+  } else {
+    return await getEvmTokenBalance(walletAddress, contractAddress, evmChainId, decimals, rpcUrl);
+  }
+}
