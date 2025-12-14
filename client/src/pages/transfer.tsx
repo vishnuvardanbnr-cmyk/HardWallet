@@ -35,6 +35,41 @@ function formatBalance(balance: string): string {
   return num.toFixed(4);
 }
 
+function getAddressPlaceholder(symbol: string | undefined): string {
+  if (!symbol) return "Enter address...";
+  
+  switch (symbol.toUpperCase()) {
+    case 'BTC':
+      return "bc1... or 1... or 3...";
+    case 'SOL':
+      return "Base58 address...";
+    case 'XRP':
+      return "r...";
+    case 'ADA':
+      return "addr1...";
+    case 'DOGE':
+      return "D...";
+    case 'DOT':
+      return "1... (SS58 format)";
+    case 'LTC':
+      return "L... or M... or ltc1...";
+    case 'BCH':
+      return "bitcoincash:q...";
+    case 'TRX':
+      return "T...";
+    case 'ATOM':
+    case 'OSMO':
+      return "cosmos1... or osmo1...";
+    case 'ETH':
+    case 'BNB':
+    case 'MATIC':
+    case 'AVAX':
+    case 'ARB':
+    default:
+      return "0x...";
+  }
+}
+
 interface GasEstimate {
   gasPrice: string;
   gasPriceGwei: string;
@@ -140,7 +175,7 @@ function SendTab({ chains, wallets, initialChainId }: { chains: Chain[]; wallets
         <Label htmlFor="recipient">Recipient Address</Label>
         <Input
           id="recipient"
-          placeholder="0x..."
+          placeholder={getAddressPlaceholder(selectedChain?.symbol)}
           value={toAddress}
           onChange={(e) => setToAddress(e.target.value)}
           className="font-mono"
