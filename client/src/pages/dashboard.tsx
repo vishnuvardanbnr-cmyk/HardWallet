@@ -239,7 +239,7 @@ const CRYPTO_ICONS: Record<string, string> = {
   'tron': `${JSDELIVR_CDN}/trx.png`,
   'avalanche-2': `${COINGECKO_CDN}/12559/small/Avalanche_Circle_RedWhite_Trans.png`,
   'shiba-inu': `${COINGECKO_CDN}/11939/small/shiba.png`,
-  'chainlink': `${JSDELIVR_CDN}/link.png`,
+  'chainlink': `${COINGECKO_CDN}/877/small/chainlink-new-logo.png`,
   'wrapped-bitcoin': `${COINGECKO_CDN}/7598/small/wrapped_bitcoin_wbtc.png`,
   'polkadot': `${COINGECKO_CDN}/12171/small/polkadot.png`,
   'bitcoin-cash': `${JSDELIVR_CDN}/bch.png`,
