@@ -876,9 +876,9 @@ export default function Dashboard() {
         </div>
 
         {/* Main Content with Left Sidebar */}
-        <div className="flex mt-4">
+        <div className="flex mt-4" style={{ height: 'calc(100vh - 200px)' }}>
           {/* Left Chain Sidebar */}
-          <div className="w-16 flex flex-col items-center gap-2 py-4 border-r">
+          <div className="w-16 flex flex-col items-center gap-2 py-4 border-r overflow-y-auto">
             {/* Show chains that have wallets */}
             {chains
               .filter(chain => displayWallets.some(w => w.chainId === chain.id))
@@ -896,8 +896,8 @@ export default function Dashboard() {
               ))}
           </div>
 
-          {/* Right Content - Token List */}
-          <div className="flex-1 p-4">
+          {/* Right Content - Wallet List */}
+          <div className="flex-1 p-4 overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
