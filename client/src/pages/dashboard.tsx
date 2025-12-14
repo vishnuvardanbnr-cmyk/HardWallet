@@ -223,6 +223,7 @@ const TOKEN_PARENT_CHAIN: Record<string, string> = {
 };
 
 const JSDELIVR_CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.16.1/128/color';
+const COINGECKO_CDN = 'https://assets.coingecko.com/coins/images';
 
 const CRYPTO_ICONS: Record<string, string> = {
   'bitcoin': `${JSDELIVR_CDN}/btc.png`,
@@ -232,21 +233,21 @@ const CRYPTO_ICONS: Record<string, string> = {
   'solana': `${JSDELIVR_CDN}/sol.png`,
   'usd-coin': `${JSDELIVR_CDN}/usdc.png`,
   'ripple': `${JSDELIVR_CDN}/xrp.png`,
-  'staked-ether': `${JSDELIVR_CDN}/steth.png`,
+  'staked-ether': `${COINGECKO_CDN}/13442/small/steth_logo.png`,
   'dogecoin': `${JSDELIVR_CDN}/doge.png`,
   'cardano': `${JSDELIVR_CDN}/ada.png`,
   'tron': `${JSDELIVR_CDN}/trx.png`,
   'avalanche-2': `${JSDELIVR_CDN}/avax.png`,
-  'shiba-inu': `${JSDELIVR_CDN}/shib.png`,
+  'shiba-inu': `${COINGECKO_CDN}/11939/small/shiba.png`,
   'chainlink': `${JSDELIVR_CDN}/link.png`,
   'wrapped-bitcoin': `${JSDELIVR_CDN}/wbtc.png`,
   'polkadot': `${JSDELIVR_CDN}/dot.png`,
   'bitcoin-cash': `${JSDELIVR_CDN}/bch.png`,
   'matic-network': `${JSDELIVR_CDN}/matic.png`,
   'litecoin': `${JSDELIVR_CDN}/ltc.png`,
-  'uniswap': `${JSDELIVR_CDN}/uni.png`,
+  'uniswap': `${COINGECKO_CDN}/12504/small/uniswap.png`,
   'cosmos': `${JSDELIVR_CDN}/atom.png`,
-  'osmosis': `${JSDELIVR_CDN}/osmo.png`,
+  'osmosis': `${COINGECKO_CDN}/16724/small/osmo.png`,
 };
 
 interface CombinedAssetCardProps {
