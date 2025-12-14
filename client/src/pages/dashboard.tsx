@@ -42,6 +42,7 @@ import { fetchPrices, formatUSD, calculateUSDValue, type PriceData } from "@/lib
 import type { Chain, Wallet as WalletType } from "@shared/schema";
 import type { TopAsset } from "@/lib/price-service";
 import { Link } from "wouter";
+import { getTokenBalanceForAsset, isTokenAsset } from "@/lib/blockchain";
 
 function formatBalance(balance: string, decimals: number = 18): string {
   const num = parseFloat(balance);
@@ -255,9 +256,10 @@ interface CombinedAssetCardProps {
   wallet?: WalletType;
   chain?: Chain;
   prices: PriceData;
+  tokenBalance?: string;
 }
 
-function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardProps) {
+function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: CombinedAssetCardProps) {
   const { toast } = useToast();
   const hasWallet = wallet && chain;
   
@@ -265,8 +267,9 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
   const isToken = !!parentChain;
   const displaySymbol = isToken ? asset.symbol.toUpperCase() : chain?.symbol || asset.symbol.toUpperCase();
   
-  const balance = hasWallet ? parseFloat(wallet.balance) : 0;
-  const usdValue = hasWallet ? calculateUSDValue(wallet.balance, chain.symbol, prices) : 0;
+  const effectiveBalance = isToken && tokenBalance ? tokenBalance : (hasWallet ? wallet.balance : "0");
+  const balance = parseFloat(effectiveBalance);
+  const usdValue = balance * (asset.currentPrice || 0);
 
   const copyAddress = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -329,7 +332,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
             {hasWallet ? (
               <>
                 <p className="font-semibold text-sm" data-testid={`text-value-${asset.id}`}>{formatUSD(usdValue)}</p>
-                <p className="text-xs text-muted-foreground">{formatBalance(wallet.balance)} {displaySymbol}</p>
+                <p className="text-xs text-muted-foreground">{formatBalance(effectiveBalance)} {displaySymbol}</p>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">{formatUSD(asset.currentPrice)}</p>
@@ -390,7 +393,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
                 <div className="flex items-baseline justify-between gap-2 mt-1">
                   <p className="text-sm text-muted-foreground">Balance</p>
                   <p className="text-lg font-bold">
-                    {formatBalance(wallet.balance)} <span className="text-sm font-normal text-muted-foreground">{displaySymbol}</span>
+                    {formatBalance(effectiveBalance)} <span className="text-sm font-normal text-muted-foreground">{displaySymbol}</span>
                   </p>
                 </div>
                 <div className="flex items-baseline justify-between gap-2 mt-1">
@@ -528,6 +531,7 @@ export default function Dashboard() {
   const [showSeedRevealDialog, setShowSeedRevealDialog] = useState(false);
   const [newSeedPhrase, setNewSeedPhrase] = useState("");
   const [seedConfirmed, setSeedConfirmed] = useState(false);
+  const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({});
   
   useEffect(() => {
     fetchPrices().then(setPrices);
@@ -536,6 +540,44 @@ export default function Dashboard() {
     }, 5000);
     return () => clearInterval(priceInterval);
   }, []);
+
+  useEffect(() => {
+    if (!isConnected || !isUnlocked || wallets.length === 0) return;
+    
+    const walletAddresses: Record<string, string> = {};
+    wallets.forEach(w => {
+      const chain = chains.find(c => c.id === w.chainId);
+      if (chain) {
+        walletAddresses[chain.symbol] = w.address;
+      }
+    });
+
+    const fetchTokenBalances = async () => {
+      const tokenAssetIds = topAssets
+        .filter(a => enabledAssetIds.has(a.id) && isTokenAsset(a.id))
+        .map(a => a.id);
+      
+      const balancePromises = tokenAssetIds.map(async (assetId) => {
+        try {
+          const balance = await getTokenBalanceForAsset(assetId, walletAddresses);
+          return [assetId, balance] as [string, string];
+        } catch {
+          return [assetId, "0"] as [string, string];
+        }
+      });
+      
+      const results = await Promise.all(balancePromises);
+      const newBalances: Record<string, string> = {};
+      results.forEach(([id, bal]) => {
+        newBalances[id] = bal;
+      });
+      setTokenBalances(newBalances);
+    };
+
+    fetchTokenBalances();
+    const tokenBalanceInterval = setInterval(fetchTokenBalances, 30000);
+    return () => clearInterval(tokenBalanceInterval);
+  }, [isConnected, isUnlocked, wallets.length, topAssets.length, enabledAssetIds.size, chains]);
 
   useEffect(() => {
     if (!isConnected || !isUnlocked || wallets.length === 0) return;
@@ -576,12 +618,20 @@ export default function Dashboard() {
     const aData = getWalletForAsset(a);
     const bData = getWalletForAsset(b);
     
-    const aValue = aData.wallet && aData.chain 
-      ? calculateUSDValue(aData.wallet.balance, aData.chain.symbol, prices) 
-      : 0;
-    const bValue = bData.wallet && bData.chain 
-      ? calculateUSDValue(bData.wallet.balance, bData.chain.symbol, prices) 
-      : 0;
+    // For token assets, use tokenBalances; for native coins, use wallet balance
+    const aIsToken = isTokenAsset(a.id);
+    const bIsToken = isTokenAsset(b.id);
+    
+    const aValue = aIsToken && tokenBalances[a.id]
+      ? parseFloat(tokenBalances[a.id]) * (a.currentPrice || 0)
+      : (aData.wallet && aData.chain 
+        ? calculateUSDValue(aData.wallet.balance, aData.chain.symbol, prices) 
+        : 0);
+    const bValue = bIsToken && tokenBalances[b.id]
+      ? parseFloat(tokenBalances[b.id]) * (b.currentPrice || 0)
+      : (bData.wallet && bData.chain 
+        ? calculateUSDValue(bData.wallet.balance, bData.chain.symbol, prices) 
+        : 0);
     
     // Sort by USD value descending, then by market cap rank for assets with 0 value
     if (bValue !== aValue) {
@@ -590,11 +640,21 @@ export default function Dashboard() {
     return (a.marketCapRank || 999) - (b.marketCapRank || 999);
   });
 
-  const totalUSDValue = displayWallets.reduce((sum, w) => {
+  // Calculate total value from native coin wallets
+  const nativeUSDValue = displayWallets.reduce((sum, w) => {
     const chain = displayChains.find(c => c.id === w.chainId);
     if (!chain) return sum;
     return sum + calculateUSDValue(w.balance, chain.symbol, prices);
   }, 0);
+
+  // Calculate total value from token balances
+  const tokenUSDValue = Object.entries(tokenBalances).reduce((sum, [assetId, balance]) => {
+    const asset = topAssets.find(a => a.id === assetId);
+    if (!asset) return sum;
+    return sum + (parseFloat(balance) * (asset.currentPrice || 0));
+  }, 0);
+
+  const totalUSDValue = nativeUSDValue + tokenUSDValue;
 
   const hasWallets = displayWallets.length > 0;
   
@@ -898,6 +958,7 @@ export default function Dashboard() {
                   wallet={wallet}
                   chain={chain}
                   prices={prices}
+                  tokenBalance={tokenBalances[asset.id]}
                 />
               );
             })}

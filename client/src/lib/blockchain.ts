@@ -330,7 +330,7 @@ const TOKEN_CONTRACTS: Record<string, { address: string; chainId: number; decima
   // The Graph
   'grt-eth': { address: '0xc944E90C64B2c07662A292be6244BDf05Cda44a7', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
   // DAI
-  'dai-eth': { address: '0x6B175474E89094C44Da98b954EesCD73FBD3855', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  'dai-eth': { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
 };
 
 // TRC-20 token addresses on TRON
