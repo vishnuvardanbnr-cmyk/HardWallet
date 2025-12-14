@@ -222,29 +222,31 @@ const TOKEN_PARENT_CHAIN: Record<string, string> = {
   'jpg-store': 'Cardano',
 };
 
+const JSDELIVR_CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.16.1/128/color';
+
 const CRYPTO_ICONS: Record<string, string> = {
-  'bitcoin': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
-  'ethereum': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
-  'tether': 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
-  'binancecoin': 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
-  'solana': 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
-  'usd-coin': 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
-  'ripple': 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png',
-  'staked-ether': 'https://assets.coingecko.com/coins/images/13442/small/steth_logo.png',
-  'dogecoin': 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
-  'cardano': 'https://assets.coingecko.com/coins/images/975/small/cardano.png',
-  'tron': 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
-  'avalanche-2': 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png',
-  'shiba-inu': 'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
-  'chainlink': 'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
-  'wrapped-bitcoin': 'https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
-  'polkadot': 'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
-  'bitcoin-cash': 'https://assets.coingecko.com/coins/images/780/small/bitcoin-cash-circle.png',
-  'matic-network': 'https://assets.coingecko.com/coins/images/4713/small/polygon.png',
-  'litecoin': 'https://assets.coingecko.com/coins/images/2/small/litecoin.png',
-  'uniswap': 'https://assets.coingecko.com/coins/images/12504/small/uniswap.png',
-  'cosmos': 'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
-  'osmosis': 'https://assets.coingecko.com/coins/images/16724/small/osmo.png',
+  'bitcoin': `${JSDELIVR_CDN}/btc.png`,
+  'ethereum': `${JSDELIVR_CDN}/eth.png`,
+  'tether': `${JSDELIVR_CDN}/usdt.png`,
+  'binancecoin': `${JSDELIVR_CDN}/bnb.png`,
+  'solana': `${JSDELIVR_CDN}/sol.png`,
+  'usd-coin': `${JSDELIVR_CDN}/usdc.png`,
+  'ripple': `${JSDELIVR_CDN}/xrp.png`,
+  'staked-ether': `${JSDELIVR_CDN}/steth.png`,
+  'dogecoin': `${JSDELIVR_CDN}/doge.png`,
+  'cardano': `${JSDELIVR_CDN}/ada.png`,
+  'tron': `${JSDELIVR_CDN}/trx.png`,
+  'avalanche-2': `${JSDELIVR_CDN}/avax.png`,
+  'shiba-inu': `${JSDELIVR_CDN}/shib.png`,
+  'chainlink': `${JSDELIVR_CDN}/link.png`,
+  'wrapped-bitcoin': `${JSDELIVR_CDN}/wbtc.png`,
+  'polkadot': `${JSDELIVR_CDN}/dot.png`,
+  'bitcoin-cash': `${JSDELIVR_CDN}/bch.png`,
+  'matic-network': `${JSDELIVR_CDN}/matic.png`,
+  'litecoin': `${JSDELIVR_CDN}/ltc.png`,
+  'uniswap': `${JSDELIVR_CDN}/uni.png`,
+  'cosmos': `${JSDELIVR_CDN}/atom.png`,
+  'osmosis': `${JSDELIVR_CDN}/osmo.png`,
 };
 
 interface CombinedAssetCardProps {
@@ -291,15 +293,17 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
         {/* Mobile: Compact single-row layout */}
         <div className="flex items-center justify-between gap-3 sm:hidden">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            {isToken || !chain ? (
+            {(asset.image || CRYPTO_ICONS[asset.id]) ? (
               <img
                 src={asset.image || CRYPTO_ICONS[asset.id] || ''}
                 alt={asset.name}
                 className="h-8 w-8 rounded-full bg-muted shrink-0"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
-            ) : (
+            ) : chain ? (
               <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="sm" />
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-muted shrink-0" />
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -336,15 +340,17 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
         <div className="hidden sm:block">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-3">
-              {isToken || !chain ? (
+              {(asset.image || CRYPTO_ICONS[asset.id]) ? (
                 <img
                   src={asset.image || CRYPTO_ICONS[asset.id] || ''}
                   alt={asset.name}
                   className="h-8 w-8 rounded-full bg-muted"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
-              ) : (
+              ) : chain ? (
                 <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="md" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-muted" />
               )}
               <div className="min-w-0">
                 <h3 className="font-semibold truncate">{asset.name}</h3>
