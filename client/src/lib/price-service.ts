@@ -15,15 +15,108 @@ const FALLBACK_PRICES: Record<string, number> = {
   DOT: 7.5,
   LTC: 105,
   BCH: 450,
+  OP: 2.5,
+  USDT: 1,
+  USDC: 1,
+};
+
+const DEFILLAMA_IDS: Record<string, string> = {
+  ETH: "coingecko:ethereum",
+  BNB: "coingecko:binancecoin",
+  MATIC: "coingecko:matic-network",
+  AVAX: "coingecko:avalanche-2",
+  ARB: "coingecko:arbitrum",
+  BTC: "coingecko:bitcoin",
+  SOL: "coingecko:solana",
+  XRP: "coingecko:ripple",
+  DOGE: "coingecko:dogecoin",
+  ADA: "coingecko:cardano",
+  TRX: "coingecko:tron",
+  DOT: "coingecko:polkadot",
+  LTC: "coingecko:litecoin",
+  BCH: "coingecko:bitcoin-cash",
+  OP: "coingecko:optimism",
+  USDT: "coingecko:tether",
+  USDC: "coingecko:usd-coin",
 };
 
 export interface PriceData {
   [symbol: string]: number;
 }
 
-let cachedPrices: PriceData = {};
+let cachedPrices: PriceData = { ...FALLBACK_PRICES };
 let lastFetchTime = 0;
-const CACHE_DURATION = 5000;
+const CACHE_DURATION = 30000;
+
+async function fetchFromDefiLlama(): Promise<PriceData | null> {
+  try {
+    const coins = Object.values(DEFILLAMA_IDS).join(",");
+    const response = await fetch(
+      `https://coins.llama.fi/prices/current/${coins}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const prices: PriceData = {};
+
+    for (const [symbol, coinId] of Object.entries(DEFILLAMA_IDS)) {
+      const coinData = data.coins?.[coinId];
+      if (coinData?.price) {
+        prices[symbol] = coinData.price;
+      }
+    }
+
+    return Object.keys(prices).length > 0 ? prices : null;
+  } catch (error) {
+    console.warn("DefiLlama fetch error:", error);
+    return null;
+  }
+}
+
+async function fetchFromCoinGecko(): Promise<PriceData | null> {
+  try {
+    const COINGECKO_IDS: Record<string, string> = {
+      ETH: "ethereum",
+      BNB: "binancecoin",
+      MATIC: "matic-network",
+      AVAX: "avalanche-2",
+      ARB: "arbitrum",
+      BTC: "bitcoin",
+      SOL: "solana",
+      XRP: "ripple",
+      DOGE: "dogecoin",
+      ADA: "cardano",
+      TRX: "tron",
+      DOT: "polkadot",
+      LTC: "litecoin",
+      BCH: "bitcoin-cash",
+    };
+
+    const ids = Object.values(COINGECKO_IDS).join(",");
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const prices: PriceData = {};
+
+    for (const [symbol, coinId] of Object.entries(COINGECKO_IDS)) {
+      if (data[coinId]?.usd) {
+        prices[symbol] = data[coinId].usd;
+      }
+    }
+
+    return Object.keys(prices).length > 0 ? prices : null;
+  } catch (error) {
+    console.warn("CoinGecko fetch error:", error);
+    return null;
+  }
+}
 
 export async function fetchPrices(): Promise<PriceData> {
   const now = Date.now();
@@ -31,28 +124,27 @@ export async function fetchPrices(): Promise<PriceData> {
     return cachedPrices;
   }
 
-  try {
-    const response = await fetch('/api/prices', {
-      signal: AbortSignal.timeout(10000)
-    });
-    
-    if (!response.ok) {
-      console.warn("Server price request failed:", response.status);
-      return Object.keys(cachedPrices).length > 0 ? cachedPrices : { ...FALLBACK_PRICES };
-    }
-    
-    const prices = await response.json();
-    
-    if (Object.keys(prices).length > 0) {
-      cachedPrices = prices;
-      lastFetchTime = now;
-      return prices;
-    }
-  } catch (error) {
-    console.warn("Price fetch error:", error);
+  let prices: PriceData = {};
+  
+  const defiLlamaPrices = await fetchFromDefiLlama();
+  if (defiLlamaPrices) {
+    prices = { ...prices, ...defiLlamaPrices };
   }
   
-  return Object.keys(cachedPrices).length > 0 ? cachedPrices : { ...FALLBACK_PRICES };
+  if (Object.keys(prices).length < 5) {
+    const geckoPrice = await fetchFromCoinGecko();
+    if (geckoPrice) {
+      prices = { ...prices, ...geckoPrice };
+    }
+  }
+
+  if (Object.keys(prices).length > 0) {
+    cachedPrices = { ...FALLBACK_PRICES, ...prices };
+    lastFetchTime = now;
+    return cachedPrices;
+  }
+
+  return cachedPrices;
 }
 
 export function formatUSD(amount: number): string {
@@ -99,24 +191,35 @@ export async function fetchTopAssets(limit: number = 20): Promise<TopAsset[]> {
   }
 
   try {
-    const response = await fetch(`/api/top-assets?limit=${limit}`, {
-      signal: AbortSignal.timeout(15000)
-    });
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=false`,
+      { signal: AbortSignal.timeout(10000) }
+    );
 
     if (!response.ok) {
-      console.warn("Server top assets request failed:", response.status);
       return getFallbackTopAssets(limit);
     }
 
     const data = await response.json();
     
-    if (data.fallback || !data.assets || data.assets.length === 0) {
+    if (!Array.isArray(data) || data.length === 0) {
       return getFallbackTopAssets(limit);
     }
-    
-    cachedTopAssets = data.assets;
+
+    const assets: TopAsset[] = data.map((coin: any) => ({
+      id: coin.id,
+      symbol: coin.symbol.toUpperCase(),
+      name: coin.name,
+      image: coin.image || "",
+      currentPrice: coin.current_price || 0,
+      marketCap: coin.market_cap || 0,
+      marketCapRank: coin.market_cap_rank || 0,
+      priceChangePercentage24h: coin.price_change_percentage_24h || 0,
+    }));
+
+    cachedTopAssets = assets;
     lastTopAssetsFetchTime = now;
-    return data.assets;
+    return assets;
   } catch (error) {
     console.warn("Top assets fetch error:", error);
     return getFallbackTopAssets(limit);
@@ -127,7 +230,7 @@ function getFallbackTopAssets(limit: number): TopAsset[] {
   if (cachedTopAssets.length > 0) {
     return cachedTopAssets.slice(0, limit);
   }
-  
+
   const fallbackPrices: Record<string, number> = {
     BTC: 100000,
     ETH: 3500,

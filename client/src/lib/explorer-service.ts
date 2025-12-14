@@ -39,83 +39,61 @@ export interface ParsedTransaction {
   contractAddress?: string;
 }
 
-const DEFAULT_EXPLORER_APIS: Record<number, string> = {
-  1: "https://api.etherscan.io/api",
-  56: "https://api.bscscan.com/api",
-  137: "https://api.polygonscan.com/api",
-  43114: "https://api.snowtrace.io/api",
-  42161: "https://api.arbiscan.io/api",
-};
-
 const CHAIN_SYMBOLS: Record<number, string> = {
   1: "ETH",
   56: "BNB",
   137: "MATIC",
   43114: "AVAX",
   42161: "ETH",
+  10: "ETH",
+};
+
+const BLOCKSCOUT_APIS: Record<number, string> = {
+  1: "https://eth.blockscout.com/api",
+  137: "https://polygon.blockscout.com/api",
+  42161: "https://arbitrum.blockscout.com/api",
+  10: "https://optimism.blockscout.com/api",
+  43114: "https://snowtrace.io/api",
 };
 
 let fetchCache: Map<string, { data: ParsedTransaction[]; timestamp: number }> = new Map();
-const CACHE_DURATION = 30000;
+const CACHE_DURATION = 60000;
 
-function deriveApiUrl(blockExplorerUrl: string | undefined, chainId: number): string | null {
-  if (DEFAULT_EXPLORER_APIS[chainId]) {
-    return DEFAULT_EXPLORER_APIS[chainId];
-  }
-  
-  if (!blockExplorerUrl) {
-    return null;
-  }
+async function fetchWithTimeout(url: string, timeout: number = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
   
   try {
-    const url = new URL(blockExplorerUrl);
-    const apiUrl = `https://api.${url.hostname}/api`;
-    return apiUrl;
-  } catch {
-    return null;
+    const response = await fetch(url, { signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
-export async function fetchTransactionHistory(
+async function fetchFromBlockscout(
   address: string,
   chainId: number,
   walletId: string,
   walletChainId: string,
-  chainSymbol: string,
-  blockExplorerUrl?: string
+  chainSymbol: string
 ): Promise<ParsedTransaction[]> {
-  const cacheKey = `native-${address}-${chainId}`;
-  const cached = fetchCache.get(cacheKey);
-  
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.data;
-  }
-
-  const apiUrl = deriveApiUrl(blockExplorerUrl, chainId);
-  if (!apiUrl) {
-    return [];
-  }
+  const apiUrl = BLOCKSCOUT_APIS[chainId];
+  if (!apiUrl) return [];
 
   try {
     const url = `${apiUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
+    const response = await fetchWithTimeout(url, 10000);
     
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.error(`Explorer API error: ${response.status}`);
-      return [];
-    }
-
+    if (!response.ok) return [];
+    
     const data = await response.json();
-    
-    if (data.status !== "1" || !Array.isArray(data.result)) {
-      return [];
-    }
+    if (data.status !== "1" || !Array.isArray(data.result)) return [];
 
-    const transactions: ExplorerTransaction[] = data.result;
     const lowerAddress = address.toLowerCase();
     const symbol = CHAIN_SYMBOLS[chainId] || chainSymbol || "ETH";
 
-    const parsed: ParsedTransaction[] = transactions.map((tx) => {
+    return data.result.map((tx: ExplorerTransaction) => {
       const isReceive = tx.to.toLowerCase() === lowerAddress;
       const valueInEth = ethers.formatEther(tx.value || "0");
       
@@ -134,13 +112,152 @@ export async function fetchTransactionHistory(
         isTokenTransfer: false,
       };
     });
-
-    fetchCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
-    return parsed;
   } catch (error) {
-    console.error(`Failed to fetch transactions for chain ${chainId}:`, error);
+    console.warn(`Blockscout fetch failed for chain ${chainId}:`, error);
     return [];
   }
+}
+
+async function fetchBtcTransactions(
+  address: string,
+  walletId: string,
+  walletChainId: string
+): Promise<ParsedTransaction[]> {
+  try {
+    const response = await fetchWithTimeout(
+      `https://blockstream.info/api/address/${address}/txs`,
+      10000
+    );
+    if (!response.ok) return [];
+    
+    const txs = await response.json();
+    if (!Array.isArray(txs)) return [];
+
+    return txs.slice(0, 50).map((tx: any) => {
+      const isReceive = tx.vout?.some((out: any) => 
+        out.scriptpubkey_address === address
+      );
+      
+      let amount = 0;
+      if (isReceive) {
+        amount = tx.vout
+          .filter((out: any) => out.scriptpubkey_address === address)
+          .reduce((sum: number, out: any) => sum + (out.value || 0), 0) / 100000000;
+      } else {
+        amount = tx.vin?.reduce((sum: number, input: any) => {
+          if (input.prevout?.scriptpubkey_address === address) {
+            return sum + (input.prevout.value || 0);
+          }
+          return sum;
+        }, 0) / 100000000 || 0;
+      }
+
+      return {
+        id: `btc-${tx.txid}`,
+        txHash: tx.txid,
+        fromAddress: isReceive ? "Unknown" : address,
+        toAddress: isReceive ? address : "Unknown",
+        amount: amount.toString(),
+        timestamp: tx.status?.block_time 
+          ? new Date(tx.status.block_time * 1000).toISOString()
+          : new Date().toISOString(),
+        type: isReceive ? "receive" : "send",
+        status: tx.status?.confirmed ? "confirmed" : "failed",
+        chainId: walletChainId,
+        tokenSymbol: "BTC",
+        walletId: walletId,
+        isTokenTransfer: false,
+      };
+    });
+  } catch (error) {
+    console.warn("BTC transaction fetch failed:", error);
+    return [];
+  }
+}
+
+async function fetchSolanaTransactions(
+  address: string,
+  walletId: string,
+  walletChainId: string
+): Promise<ParsedTransaction[]> {
+  try {
+    const response = await fetchWithTimeout('https://api.mainnet-beta.solana.com', 8000);
+    
+    const signatureResponse = await fetch('https://api.mainnet-beta.solana.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getSignaturesForAddress',
+        params: [address, { limit: 20 }]
+      }),
+    });
+
+    if (!signatureResponse.ok) return [];
+    const sigData = await signatureResponse.json();
+    
+    if (!sigData.result || !Array.isArray(sigData.result)) return [];
+
+    return sigData.result.slice(0, 20).map((sig: any) => ({
+      id: `sol-${sig.signature}`,
+      txHash: sig.signature,
+      fromAddress: address,
+      toAddress: "Unknown",
+      amount: "0",
+      timestamp: sig.blockTime 
+        ? new Date(sig.blockTime * 1000).toISOString()
+        : new Date().toISOString(),
+      type: "send" as const,
+      status: sig.err ? "failed" : "confirmed",
+      chainId: walletChainId,
+      tokenSymbol: "SOL",
+      walletId: walletId,
+      isTokenTransfer: false,
+    }));
+  } catch (error) {
+    console.warn("Solana transaction fetch failed:", error);
+    return [];
+  }
+}
+
+export async function fetchTransactionHistory(
+  address: string,
+  chainId: number,
+  walletId: string,
+  walletChainId: string,
+  chainSymbol: string,
+  blockExplorerUrl?: string
+): Promise<ParsedTransaction[]> {
+  const cacheKey = `native-${address}-${chainId}-${chainSymbol}`;
+  const cached = fetchCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data;
+  }
+
+  let transactions: ParsedTransaction[] = [];
+
+  if (chainId === 0) {
+    switch (chainSymbol.toUpperCase()) {
+      case 'BTC':
+        transactions = await fetchBtcTransactions(address, walletId, walletChainId);
+        break;
+      case 'SOL':
+        transactions = await fetchSolanaTransactions(address, walletId, walletChainId);
+        break;
+      default:
+        transactions = [];
+    }
+  } else {
+    transactions = await fetchFromBlockscout(address, chainId, walletId, walletChainId, chainSymbol);
+  }
+
+  if (transactions.length > 0) {
+    fetchCache.set(cacheKey, { data: transactions, timestamp: Date.now() });
+  }
+
+  return transactions;
 }
 
 export async function fetchTokenTransfers(
@@ -150,41 +267,34 @@ export async function fetchTokenTransfers(
   walletChainId: string,
   blockExplorerUrl?: string
 ): Promise<ParsedTransaction[]> {
+  if (chainId === 0) return [];
+
   const cacheKey = `tokens-${address}-${chainId}`;
   const cached = fetchCache.get(cacheKey);
-  
+
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.data;
   }
 
-  const apiUrl = deriveApiUrl(blockExplorerUrl, chainId);
-  if (!apiUrl) {
-    return [];
-  }
+  const apiUrl = BLOCKSCOUT_APIS[chainId];
+  if (!apiUrl) return [];
 
   try {
     const url = `${apiUrl}?module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.error(`Explorer API error for tokens: ${response.status}`);
-      return [];
-    }
+    const response = await fetchWithTimeout(url, 10000);
+
+    if (!response.ok) return [];
 
     const data = await response.json();
-    
-    if (data.status !== "1" || !Array.isArray(data.result)) {
-      return [];
-    }
+    if (data.status !== "1" || !Array.isArray(data.result)) return [];
 
-    const transfers: TokenTransfer[] = data.result;
     const lowerAddress = address.toLowerCase();
 
-    const parsed: ParsedTransaction[] = transfers.map((tx) => {
+    const parsed: ParsedTransaction[] = data.result.map((tx: TokenTransfer) => {
       const isReceive = tx.to.toLowerCase() === lowerAddress;
       const decimals = parseInt(tx.tokenDecimal) || 18;
       const amount = ethers.formatUnits(tx.value || "0", decimals);
-      
+
       return {
         id: `token-${tx.hash}-${tx.contractAddress}`,
         txHash: tx.hash,
@@ -205,59 +315,60 @@ export async function fetchTokenTransfers(
     fetchCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
     return parsed;
   } catch (error) {
-    console.error(`Failed to fetch token transfers for chain ${chainId}:`, error);
+    console.warn(`Token transfers fetch failed for chain ${chainId}:`, error);
     return [];
   }
 }
 
 export async function fetchAllTransactions(
-  wallets: Array<{ 
-    id: string; 
-    address: string; 
-    chainId: string; 
+  wallets: Array<{
+    id: string;
+    address: string;
+    chainId: string;
     numericChainId: number;
     chainSymbol: string;
     blockExplorerUrl?: string;
   }>
 ): Promise<ParsedTransaction[]> {
   const allTransactions: ParsedTransaction[] = [];
-  
+
   const results = await Promise.all(
     wallets.flatMap((wallet) => {
-      if (wallet.numericChainId === 0) return [Promise.resolve([])];
       return [
         fetchTransactionHistory(
-          wallet.address, 
-          wallet.numericChainId, 
-          wallet.id, 
-          wallet.chainId,
-          wallet.chainSymbol,
-          wallet.blockExplorerUrl
-        ),
-        fetchTokenTransfers(
           wallet.address,
           wallet.numericChainId,
           wallet.id,
           wallet.chainId,
+          wallet.chainSymbol,
           wallet.blockExplorerUrl
         ),
+        wallet.numericChainId > 0
+          ? fetchTokenTransfers(
+              wallet.address,
+              wallet.numericChainId,
+              wallet.id,
+              wallet.chainId,
+              wallet.blockExplorerUrl
+            )
+          : Promise.resolve([]),
       ];
     })
   );
-  
+
   for (const txs of results) {
     allTransactions.push(...txs);
   }
-  
+
   const uniqueTxs = new Map<string, ParsedTransaction>();
   for (const tx of allTransactions) {
     uniqueTxs.set(tx.id, tx);
   }
-  
-  const sortedTxs = Array.from(uniqueTxs.values()).sort((a, b) => 
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+
+  const sortedTxs = Array.from(uniqueTxs.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
-  
+
   return sortedTxs;
 }
 
