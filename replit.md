@@ -57,6 +57,12 @@ Preferred communication style: Simple, everyday language.
 - Security-focused aesthetic with professional, clean visuals
 
 ## Recent Changes
+- **Custom Chain/Network Support** (Dec 2024): Added ability to add custom EVM blockchain networks:
+  - Add custom networks with name, symbol, chain ID, RPC URL, and block explorer
+  - Custom chains merge with default chains and appear in the Networks tab
+  - Balance fetching uses custom RPC URLs for non-default chains
+  - Custom chains persisted in IndexedDB via client-storage
+  - Wallet addresses derived automatically for custom EVM chains (share ETH-compatible addresses)
 - **Custom Token Support** (Dec 2024): Added ability to track any ERC-20, BEP-20, or TRC-20 token:
   - Add custom tokens via contract address in Manage Crypto page
   - Auto-fetch token info (name, symbol, decimals) for EVM chains
