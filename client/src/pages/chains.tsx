@@ -278,7 +278,19 @@ const SUPPORTED_TOKEN_CHAINS = [
   { id: 'TRX', name: 'TRON (TRC-20)', evmChainId: 0, rpcUrl: '', type: 'tron' as const },
 ];
 
-function AddTokenDialog({ addCustomToken }: { addCustomToken: (token: Omit<CustomToken, 'id' | 'addedAt'>) => Promise<CustomToken> }) {
+interface TokenChainOption {
+  id: string;
+  name: string;
+  evmChainId: number;
+  rpcUrl: string;
+  type: 'evm' | 'tron';
+  isCustom?: boolean;
+}
+
+function AddTokenDialog({ addCustomToken, customChains }: { 
+  addCustomToken: (token: Omit<CustomToken, 'id' | 'addedAt'>) => Promise<CustomToken>;
+  customChains: import("@/lib/client-storage").CustomChain[];
+}) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [selectedChain, setSelectedChain] = useState("");
@@ -291,7 +303,20 @@ function AddTokenDialog({ addCustomToken }: { addCustomToken: (token: Omit<Custo
   const [manualSymbol, setManualSymbol] = useState("");
   const [manualDecimals, setManualDecimals] = useState("18");
 
-  const selectedChainData = SUPPORTED_TOKEN_CHAINS.find(c => c.id === selectedChain);
+  // Merge default chains with custom chains
+  const allTokenChains: TokenChainOption[] = [
+    ...SUPPORTED_TOKEN_CHAINS,
+    ...customChains.map(c => ({
+      id: c.id,
+      name: `${c.name} (Custom)`,
+      evmChainId: c.chainId,
+      rpcUrl: c.rpcUrl,
+      type: 'evm' as const,
+      isCustom: true,
+    })),
+  ];
+
+  const selectedChainData = allTokenChains.find(c => c.id === selectedChain);
   const isTronChain = selectedChainData?.type === 'tron';
 
   const handleChainChange = (chainId: string) => {
@@ -312,7 +337,7 @@ function AddTokenDialog({ addCustomToken }: { addCustomToken: (token: Omit<Custo
   const fetchTokenInfoHandler = async () => {
     if (!selectedChain || !contractAddress) return;
     
-    const chain = SUPPORTED_TOKEN_CHAINS.find(c => c.id === selectedChain);
+    const chain = allTokenChains.find(c => c.id === selectedChain);
     if (!chain) return;
 
     if (chain.type === 'tron') {
@@ -348,7 +373,7 @@ function AddTokenDialog({ addCustomToken }: { addCustomToken: (token: Omit<Custo
   const handleAddToken = async () => {
     if (!selectedChain || !contractAddress) return;
 
-    const chain = SUPPORTED_TOKEN_CHAINS.find(c => c.id === selectedChain);
+    const chain = allTokenChains.find(c => c.id === selectedChain);
     if (!chain) return;
 
     const tokenData = isTronChain
@@ -424,7 +449,7 @@ function AddTokenDialog({ addCustomToken }: { addCustomToken: (token: Omit<Custo
                 <SelectValue placeholder="Select a network" />
               </SelectTrigger>
               <SelectContent>
-                {SUPPORTED_TOKEN_CHAINS.map((chain) => (
+                {allTokenChains.map((chain) => (
                   <SelectItem key={chain.id} value={chain.id}>
                     {chain.name}
                   </SelectItem>
@@ -616,7 +641,7 @@ export default function Chains() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Chains & Tokens</h1>
         <div className="flex gap-2">
-          <AddTokenDialog addCustomToken={addCustomToken} />
+          <AddTokenDialog addCustomToken={addCustomToken} customChains={customChains} />
           <AddChainDialog addCustomChain={addCustomChain} />
         </div>
       </div>
@@ -651,7 +676,7 @@ export default function Chains() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Add custom ERC-20, BEP-20, or TRC-20 tokens to track
                 </p>
-                <AddTokenDialog addCustomToken={addCustomToken} />
+                <AddTokenDialog addCustomToken={addCustomToken} customChains={customChains} />
               </CardContent>
             </Card>
           ) : (
