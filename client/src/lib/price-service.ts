@@ -134,31 +134,15 @@ export async function fetchTopAssets(limit: number = 20): Promise<TopAsset[]> {
     return cachedTopAssets.slice(0, limit);
   }
 
+  // Use DefiLlama for prices (CORS-enabled) combined with fallback asset list
   try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=false`,
-      { signal: AbortSignal.timeout(10000) }
-    );
-
-    if (!response.ok) {
-      return getFallbackTopAssets(limit);
-    }
-
-    const data = await response.json();
+    const prices = await fetchPrices();
     
-    if (!Array.isArray(data) || data.length === 0) {
-      return getFallbackTopAssets(limit);
-    }
-
-    const assets: TopAsset[] = data.map((coin: any) => ({
-      id: coin.id,
-      symbol: coin.symbol.toUpperCase(),
-      name: coin.name,
-      image: coin.image || "",
-      currentPrice: coin.current_price || 0,
-      marketCap: coin.market_cap || 0,
-      marketCapRank: coin.market_cap_rank || 0,
-      priceChangePercentage24h: coin.price_change_percentage_24h || 0,
+    const assets: TopAsset[] = FALLBACK_TOP_ASSETS.slice(0, limit).map((asset) => ({
+      ...asset,
+      currentPrice: prices[asset.symbol] || FALLBACK_PRICES[asset.symbol] || 0,
+      priceChangePercentage24h: 0,
+      image: "",
     }));
 
     cachedTopAssets = assets;
