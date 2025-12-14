@@ -276,9 +276,10 @@ interface CombinedAssetCardProps {
   chain?: Chain;
   prices: PriceData;
   tokenBalance?: string;
+  onOpenWalletDetail?: (wallet: WalletType, chain: Chain) => void;
 }
 
-function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: CombinedAssetCardProps) {
+function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance, onOpenWalletDetail }: CombinedAssetCardProps) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const hasWallet = wallet && chain;
@@ -496,11 +497,11 @@ function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: Combi
     </Card>
   );
 
-  if (hasWallet) {
+  if (hasWallet && onOpenWalletDetail) {
     return (
-      <Link href={`/wallet/${chain.id}?asset=${asset.id}`}>
+      <div onClick={() => onOpenWalletDetail(wallet, chain)}>
         {cardContent}
-      </Link>
+      </div>
     );
   }
 
@@ -1501,6 +1502,10 @@ export default function Dashboard() {
                   chain={chain}
                   prices={prices}
                   tokenBalance={tokenBalances[asset.id]}
+                  onOpenWalletDetail={(w, c) => {
+                    setSelectedWalletChain({ wallet: w, chain: c });
+                    setWalletDetailOpen(true);
+                  }}
                 />
               );
             })}
