@@ -43,6 +43,16 @@ const ASSET_INFO: Record<string, { name: string; symbol: string; image?: string 
   'osmosis': { name: 'Osmosis', symbol: 'OSMO', image: 'https://assets.coingecko.com/coins/images/16724/small/osmo.png' },
 };
 
+const ERC20_TOKENS = new Set([
+  'tether',
+  'usd-coin',
+  'staked-ether',
+  'chainlink',
+  'wrapped-bitcoin',
+  'uniswap',
+  'shiba-inu',
+]);
+
 function formatBalance(balance: string): string {
   const num = parseFloat(balance);
   if (isNaN(num)) return "0.00";
@@ -209,7 +219,10 @@ export default function WalletDetail() {
           )}
           <div>
             <h1 className="text-2xl font-bold">{displayName}</h1>
-            <p className="text-sm text-muted-foreground">{displaySymbol}</p>
+            <p className="text-sm text-muted-foreground">
+              {displaySymbol}
+              {assetId && ERC20_TOKENS.has(assetId) && <span className="ml-1 opacity-70">on Ethereum</span>}
+            </p>
           </div>
         </div>
       </div>

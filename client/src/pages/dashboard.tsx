@@ -86,6 +86,16 @@ const COINGECKO_ID_TO_CHAIN_SYMBOL: Record<string, string> = {
   'shiba-inu': 'ETH',
 };
 
+const ERC20_TOKENS = new Set([
+  'tether',
+  'usd-coin',
+  'staked-ether',
+  'chainlink',
+  'wrapped-bitcoin',
+  'uniswap',
+  'shiba-inu',
+]);
+
 const CRYPTO_ICONS: Record<string, string> = {
   'bitcoin': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
   'ethereum': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
@@ -121,6 +131,9 @@ interface CombinedAssetCardProps {
 function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardProps) {
   const { toast } = useToast();
   const hasWallet = wallet && chain;
+  
+  const isErc20Token = ERC20_TOKENS.has(asset.id);
+  const displaySymbol = isErc20Token ? asset.symbol.toUpperCase() : chain?.symbol || asset.symbol.toUpperCase();
   
   const balance = hasWallet ? parseFloat(wallet.balance) : 0;
   const usdValue = hasWallet ? calculateUSDValue(wallet.balance, chain.symbol, prices) : 0;
@@ -174,14 +187,17 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
                   {asset.priceChangePercentage24h >= 0 ? "+" : ""}{asset.priceChangePercentage24h.toFixed(1)}%
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">{asset.symbol.toUpperCase()}</p>
+              <p className="text-xs text-muted-foreground">
+                {asset.symbol.toUpperCase()}
+                {isErc20Token && <span className="ml-1 opacity-70">on Ethereum</span>}
+              </p>
             </div>
           </div>
           <div className="text-right shrink-0">
             {hasWallet ? (
               <>
                 <p className="font-semibold text-sm" data-testid={`text-value-${asset.id}`}>{formatUSD(usdValue)}</p>
-                <p className="text-xs text-muted-foreground">{formatBalance(wallet.balance)} {chain.symbol}</p>
+                <p className="text-xs text-muted-foreground">{formatBalance(wallet.balance)} {displaySymbol}</p>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">{formatUSD(asset.currentPrice)}</p>
@@ -205,7 +221,10 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
               )}
               <div className="min-w-0">
                 <h3 className="font-semibold truncate">{asset.name}</h3>
-                <p className="text-sm text-muted-foreground">{asset.symbol.toUpperCase()}</p>
+                <p className="text-sm text-muted-foreground">
+                  {asset.symbol.toUpperCase()}
+                  {isErc20Token && <span className="ml-1 opacity-70">on Ethereum</span>}
+                </p>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
@@ -237,7 +256,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
                 <div className="flex items-baseline justify-between gap-2 mt-1">
                   <p className="text-sm text-muted-foreground">Balance</p>
                   <p className="text-lg font-bold">
-                    {formatBalance(wallet.balance)} <span className="text-sm font-normal text-muted-foreground">{chain.symbol}</span>
+                    {formatBalance(wallet.balance)} <span className="text-sm font-normal text-muted-foreground">{displaySymbol}</span>
                   </p>
                 </div>
                 <div className="flex items-baseline justify-between gap-2 mt-1">
