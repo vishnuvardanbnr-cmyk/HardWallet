@@ -41,7 +41,7 @@ import { HardwareStatusCard, WalletModeSelector } from "@/components/hardware-st
 import { fetchPrices, formatUSD, calculateUSDValue, type PriceData } from "@/lib/price-service";
 import type { Chain, Wallet as WalletType } from "@shared/schema";
 import type { TopAsset } from "@/lib/price-service";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { getTokenBalanceForAsset, isTokenAsset, getCustomTokenBalance } from "@/lib/blockchain";
 import type { CustomToken } from "@/lib/client-storage";
 
@@ -270,6 +270,7 @@ interface CombinedAssetCardProps {
 
 function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: CombinedAssetCardProps) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const hasWallet = wallet && chain;
   
   const parentChain = TOKEN_PARENT_CHAIN[asset.id];
@@ -458,7 +459,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: Combi
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    window.location.href = `/transfer?type=send&chain=${chain.id}`;
+                    navigate(`/transfer?type=send&chain=${chain.id}`);
                   }}
                 >
                   <ArrowUpRight className="mr-1.5 h-4 w-4" />
@@ -471,7 +472,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: Combi
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    window.location.href = `/transfer?type=receive&chain=${chain.id}`;
+                    navigate(`/transfer?type=receive&chain=${chain.id}`);
                   }}
                 >
                   <ArrowDownLeft className="mr-1.5 h-4 w-4" />
