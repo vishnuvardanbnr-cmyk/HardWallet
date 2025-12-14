@@ -62,12 +62,14 @@ function SendTab({ chains, wallets, initialChainId }: { chains: Chain[]; wallets
     refetchInterval: 30000,
   });
 
+  // Update selected chain when initialChainId changes (e.g., user clicks different chain's Send button)
   useEffect(() => {
-    if (chains.length > 0 && !selectedChainId) {
-      const validChain = initialChainId && chains.find(c => c.id === initialChainId);
-      setSelectedChainId(validChain ? initialChainId : chains[0].id);
+    if (initialChainId && chains.find(c => c.id === initialChainId)) {
+      setSelectedChainId(initialChainId);
+    } else if (chains.length > 0 && !selectedChainId) {
+      setSelectedChainId(chains[0].id);
     }
-  }, [chains, selectedChainId, initialChainId]);
+  }, [chains, initialChainId]);
 
   const handleSend = () => {
     setError("");
@@ -243,12 +245,14 @@ function ReceiveTab({ chains, wallets, initialChainId }: { chains: Chain[]; wall
   const selectedChain = chains.find((c) => c.id === selectedChainId);
   const selectedWallet = wallets.find((w) => w.chainId === selectedChainId);
 
+  // Update selected chain when initialChainId changes (e.g., user clicks different chain's Receive button)
   useEffect(() => {
-    if (chains.length > 0 && !selectedChainId) {
-      const validChain = initialChainId && chains.find(c => c.id === initialChainId);
-      setSelectedChainId(validChain ? initialChainId : chains[0].id);
+    if (initialChainId && chains.find(c => c.id === initialChainId)) {
+      setSelectedChainId(initialChainId);
+    } else if (chains.length > 0 && !selectedChainId) {
+      setSelectedChainId(chains[0].id);
     }
-  }, [chains, selectedChainId, initialChainId]);
+  }, [chains, initialChainId]);
 
   const copyAddress = () => {
     if (selectedWallet) {
