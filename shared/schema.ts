@@ -396,6 +396,4 @@ export const FALLBACK_TOP_ASSETS: CryptoAsset[] = [
   { id: "uniswap", symbol: "UNI", name: "Uniswap", marketCapRank: 20 },
   { id: "cosmos", symbol: "ATOM", name: "Cosmos", marketCapRank: 21 },
   { id: "osmosis", symbol: "OSMO", name: "Osmosis", marketCapRank: 22 },
-  { id: "tether-bep20", symbol: "USDT", name: "Tether (BEP20)", marketCapRank: 23 },
-  { id: "tether-trc20", symbol: "USDT", name: "Tether (TRC20)", marketCapRank: 24 },
 ];
