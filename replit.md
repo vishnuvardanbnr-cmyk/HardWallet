@@ -57,6 +57,12 @@ Preferred communication style: Simple, everyday language.
 - Security-focused aesthetic with professional, clean visuals
 
 ## Recent Changes
+- **Custom Token Support** (Dec 2024): Added ability to track any ERC-20, BEP-20, or TRC-20 token:
+  - Add custom tokens via contract address in Manage Crypto page
+  - Auto-fetch token info (name, symbol, decimals) for EVM chains
+  - Manual entry for TRON tokens
+  - Custom token balances displayed on dashboard
+  - Tokens persisted in IndexedDB via client-storage
 - **Polkadot (DOT) Wallet Support** (Dec 2024): Added Polkadot blockchain support with:
   - SLIP-0010 ed25519 key derivation (path: m/44'/354'/accountIndex'/0'/0')
   - SS58 address encoding with Blake2b-512 checksum
