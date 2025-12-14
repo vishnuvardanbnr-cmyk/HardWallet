@@ -57,6 +57,10 @@ Preferred communication style: Simple, everyday language.
 - Security-focused aesthetic with professional, clean visuals
 
 ## Recent Changes
+- **Polkadot (DOT) Wallet Support** (Dec 2024): Added Polkadot blockchain support with:
+  - SLIP-0010 ed25519 key derivation (path: m/44'/354'/accountIndex'/0'/0')
+  - SS58 address encoding with Blake2b-512 checksum
+  - Native DOT chain in default chains list
 - **Independent Seed Per Wallet** (Dec 2024): Users can now create additional wallets with either:
   1. Derive from existing seed (uses main seed with different account index)
   2. Generate new seed phrase (creates completely independent wallet with its own seed and PIN)
