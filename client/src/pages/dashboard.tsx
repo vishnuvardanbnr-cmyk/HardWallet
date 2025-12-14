@@ -147,6 +147,9 @@ const COINGECKO_ID_TO_CHAIN_SYMBOL: Record<string, string> = {
   'just': 'TRX',
   'sun-token': 'TRX',
   'bittorrent': 'TRX',
+  'tether-trc20': 'TRX',
+  // BEP20 tokens
+  'tether-bep20': 'BNB',
   // Cardano tokens
   'minswap': 'ADA',
   'sundaeswap': 'ADA',
@@ -217,6 +220,8 @@ const TOKEN_PARENT_CHAIN: Record<string, string> = {
   'just': 'TRON',
   'sun-token': 'TRON',
   'bittorrent': 'TRON',
+  'tether-trc20': 'TRON',
+  'tether-bep20': 'BNB Chain',
   'minswap': 'Cardano',
   'sundaeswap': 'Cardano',
   'jpg-store': 'Cardano',
@@ -248,6 +253,8 @@ const CRYPTO_ICONS: Record<string, string> = {
   'uniswap': `${COINGECKO_CDN}/12504/small/uniswap.png`,
   'cosmos': `${JSDELIVR_CDN}/atom.png`,
   'osmosis': `${COINGECKO_CDN}/16724/small/osmo.png`,
+  'tether-bep20': `${JSDELIVR_CDN}/usdt.png`,
+  'tether-trc20': `${JSDELIVR_CDN}/usdt.png`,
 };
 
 interface CombinedAssetCardProps {
