@@ -1,0 +1,429 @@
+const DB_NAME = "SecureVaultDB";
+const DB_VERSION = 1;
+
+export interface StoredWallet {
+  id: string;
+  address: string;
+  chainId: string;
+  chainName: string;
+  chainSymbol: string;
+  balance: string;
+  path: string;
+  lastUpdated: string;
+  accountIndex: number; // Wallet index for multi-wallet support
+  label?: string; // Optional user-defined label
+  walletGroupId?: string; // Unique ID for independent seed group (undefined = uses primary seed)
+}
+
+// Encrypted seed storage for each wallet group (independent seeds)
+export interface StoredWalletSeed {
+  walletGroupId: string;
+  encryptedSeed: string;
+  pinHash: string;
+  pinSalt: string;
+  createdAt: string;
+}
+
+export interface StoredTransaction {
+  id: string;
+  walletId: string;
+  chainId: string;
+  type: "send" | "receive";
+  status: "pending" | "confirmed" | "failed";
+  amount: string;
+  tokenSymbol: string;
+  toAddress: string;
+  fromAddress: string;
+  txHash?: string;
+  gasUsed?: string;
+  timestamp: string;
+}
+
+export interface WalletProfile {
+  id: string;
+  name: string;
+  createdAt: string;
+  wallets: StoredWallet[];
+  lastAccessed: string;
+}
+
+class ClientStorage {
+  private db: IDBDatabase | null = null;
+
+  async init(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+
+        if (!db.objectStoreNames.contains("profiles")) {
+          const profileStore = db.createObjectStore("profiles", { keyPath: "id" });
+          profileStore.createIndex("name", "name", { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains("wallets")) {
+          const walletStore = db.createObjectStore("wallets", { keyPath: "id" });
+          walletStore.createIndex("address", "address", { unique: false });
+          walletStore.createIndex("chainId", "chainId", { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains("transactions")) {
+          const txStore = db.createObjectStore("transactions", { keyPath: "id" });
+          txStore.createIndex("walletId", "walletId", { unique: false });
+          txStore.createIndex("timestamp", "timestamp", { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains("settings")) {
+          db.createObjectStore("settings", { keyPath: "key" });
+        }
+      };
+    });
+  }
+
+  private getStore(storeName: string, mode: IDBTransactionMode = "readonly"): IDBObjectStore {
+    if (!this.db) throw new Error("Database not initialized");
+    const transaction = this.db.transaction(storeName, mode);
+    return transaction.objectStore(storeName);
+  }
+
+  async saveProfile(profile: WalletProfile): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("profiles", "readwrite");
+      const request = store.put(profile);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async getProfile(id: string): Promise<WalletProfile | null> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("profiles");
+      const request = store.get(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || null);
+    });
+  }
+
+  async getAllProfiles(): Promise<WalletProfile[]> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("profiles");
+      const request = store.getAll();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async deleteProfile(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("profiles", "readwrite");
+      const request = store.delete(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async saveWallet(wallet: StoredWallet): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("wallets", "readwrite");
+      const request = store.put(wallet);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async getWallet(id: string): Promise<StoredWallet | null> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("wallets");
+      const request = store.get(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || null);
+    });
+  }
+
+  async getWalletsByAddress(address: string): Promise<StoredWallet[]> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("wallets");
+      const index = store.index("address");
+      const request = index.getAll(address);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async getAllWallets(): Promise<StoredWallet[]> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("wallets");
+      const request = store.getAll();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async deleteWallet(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("wallets", "readwrite");
+      const request = store.delete(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async saveTransaction(tx: StoredTransaction): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("transactions", "readwrite");
+      const request = store.put(tx);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async getTransactionsByWallet(walletId: string): Promise<StoredTransaction[]> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("transactions");
+      const index = store.index("walletId");
+      const request = index.getAll(walletId);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async getAllTransactions(): Promise<StoredTransaction[]> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("transactions");
+      const request = store.getAll();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async deleteTransaction(id: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("transactions", "readwrite");
+      const request = store.delete(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async deleteTransactionsByWallet(walletId: string): Promise<void> {
+    const transactions = await this.getTransactionsByWallet(walletId);
+    for (const tx of transactions) {
+      await this.deleteTransaction(tx.id);
+    }
+  }
+
+  async saveSetting(key: string, value: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("settings", "readwrite");
+      const request = store.put({ key, value });
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async getSetting<T>(key: string): Promise<T | null> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("settings");
+      const request = store.get(key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result?.value || null);
+    });
+  }
+
+  async deleteSetting(key: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const store = this.getStore("settings", "readwrite");
+      const request = store.delete(key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  async clearAll(): Promise<void> {
+    const stores = ["profiles", "wallets", "transactions", "settings"];
+    for (const storeName of stores) {
+      await new Promise<void>((resolve, reject) => {
+        const store = this.getStore(storeName, "readwrite");
+        const request = store.clear();
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    }
+  }
+
+  // Enabled assets management - stores Set of asset IDs that are enabled
+  private readonly ENABLED_ASSETS_KEY = "enabledAssets";
+
+  async getEnabledAssets(): Promise<Set<string>> {
+    const stored = await this.getSetting<string[]>(this.ENABLED_ASSETS_KEY);
+    if (stored && Array.isArray(stored)) {
+      return new Set(stored);
+    }
+    return new Set(); // Empty means use defaults (all enabled)
+  }
+
+  async setEnabledAssets(assetIds: Set<string>): Promise<void> {
+    await this.saveSetting(this.ENABLED_ASSETS_KEY, Array.from(assetIds));
+  }
+
+  async toggleAsset(assetId: string, enabled: boolean): Promise<Set<string>> {
+    const current = await this.getEnabledAssets();
+    if (enabled) {
+      current.add(assetId);
+    } else {
+      current.delete(assetId);
+    }
+    await this.setEnabledAssets(current);
+    return current;
+  }
+
+  async isAssetEnabled(assetId: string): Promise<boolean> {
+    const enabled = await this.getEnabledAssets();
+    // If no preferences saved yet, all are enabled by default
+    if (enabled.size === 0) {
+      return true;
+    }
+    return enabled.has(assetId);
+  }
+
+  async hasEnabledAssetsPreference(): Promise<boolean> {
+    const stored = await this.getSetting<string[]>(this.ENABLED_ASSETS_KEY);
+    return stored !== null && Array.isArray(stored);
+  }
+
+  // Mode-specific wallet setup tracking
+  private readonly SOFT_WALLET_SETUP_KEY = "softWalletSetup";
+  private readonly HARD_WALLET_SETUP_KEY = "hardWalletSetup";
+  private readonly SOFT_WALLET_DATA_KEY = "softWalletData";
+  private readonly HARD_WALLET_DATA_KEY = "hardWalletData";
+
+  async isSoftWalletSetup(): Promise<boolean> {
+    const stored = await this.getSetting<boolean>(this.SOFT_WALLET_SETUP_KEY);
+    return stored === true;
+  }
+
+  async isHardWalletSetup(): Promise<boolean> {
+    const stored = await this.getSetting<boolean>(this.HARD_WALLET_SETUP_KEY);
+    return stored === true;
+  }
+
+  async setSoftWalletSetup(isSetup: boolean): Promise<void> {
+    await this.saveSetting(this.SOFT_WALLET_SETUP_KEY, isSetup);
+  }
+
+  async setHardWalletSetup(isSetup: boolean): Promise<void> {
+    await this.saveSetting(this.HARD_WALLET_SETUP_KEY, isSetup);
+  }
+
+  async saveSoftWalletData(wallets: StoredWallet[]): Promise<void> {
+    await this.saveSetting(this.SOFT_WALLET_DATA_KEY, wallets);
+  }
+
+  async saveHardWalletData(wallets: StoredWallet[]): Promise<void> {
+    await this.saveSetting(this.HARD_WALLET_DATA_KEY, wallets);
+  }
+
+  async getSoftWalletData(): Promise<StoredWallet[]> {
+    const stored = await this.getSetting<StoredWallet[]>(this.SOFT_WALLET_DATA_KEY);
+    return stored || [];
+  }
+
+  async getHardWalletData(): Promise<StoredWallet[]> {
+    const stored = await this.getSetting<StoredWallet[]>(this.HARD_WALLET_DATA_KEY);
+    return stored || [];
+  }
+
+  async clearSoftWallet(): Promise<void> {
+    await this.deleteSetting(this.SOFT_WALLET_SETUP_KEY);
+    await this.deleteSetting(this.SOFT_WALLET_DATA_KEY);
+  }
+
+  async clearHardWallet(): Promise<void> {
+    await this.deleteSetting(this.HARD_WALLET_SETUP_KEY);
+    await this.deleteSetting(this.HARD_WALLET_DATA_KEY);
+  }
+
+  // Encrypted seed phrase storage for soft wallet (like MetaMask/Trust Wallet)
+  private readonly SOFT_WALLET_ENCRYPTED_SEED_KEY = "softWalletEncryptedSeed";
+  private readonly SOFT_WALLET_PIN_HASH_KEY = "softWalletPinHash";
+  private readonly SOFT_WALLET_PIN_SALT_KEY = "softWalletPinSalt";
+
+  async saveEncryptedSeed(encryptedSeed: string, pinHash: string, pinSalt: string): Promise<void> {
+    await this.saveSetting(this.SOFT_WALLET_ENCRYPTED_SEED_KEY, encryptedSeed);
+    await this.saveSetting(this.SOFT_WALLET_PIN_HASH_KEY, pinHash);
+    await this.saveSetting(this.SOFT_WALLET_PIN_SALT_KEY, pinSalt);
+  }
+
+  async getEncryptedSeed(): Promise<string | null> {
+    return await this.getSetting<string>(this.SOFT_WALLET_ENCRYPTED_SEED_KEY);
+  }
+
+  async getPinHash(): Promise<string | null> {
+    return await this.getSetting<string>(this.SOFT_WALLET_PIN_HASH_KEY);
+  }
+
+  async getPinSalt(): Promise<string | null> {
+    return await this.getSetting<string>(this.SOFT_WALLET_PIN_SALT_KEY);
+  }
+
+  async hasEncryptedSeed(): Promise<boolean> {
+    const seed = await this.getEncryptedSeed();
+    return seed !== null && seed.length > 0;
+  }
+
+  async clearEncryptedSeed(): Promise<void> {
+    await this.deleteSetting(this.SOFT_WALLET_ENCRYPTED_SEED_KEY);
+    await this.deleteSetting(this.SOFT_WALLET_PIN_HASH_KEY);
+    await this.deleteSetting(this.SOFT_WALLET_PIN_SALT_KEY);
+  }
+
+  // Get the next available account index for creating additional wallets
+  getNextAccountIndex(wallets: StoredWallet[]): number {
+    if (wallets.length === 0) return 0;
+    const maxIndex = Math.max(...wallets.map(w => w.accountIndex ?? 0));
+    return maxIndex + 1;
+  }
+
+  // Multiple wallet seed storage (independent seeds per wallet group)
+  private readonly WALLET_SEEDS_KEY = "walletSeeds";
+
+  async saveWalletSeed(seed: StoredWalletSeed): Promise<void> {
+    const seeds = await this.getAllWalletSeeds();
+    const existingIndex = seeds.findIndex(s => s.walletGroupId === seed.walletGroupId);
+    if (existingIndex >= 0) {
+      seeds[existingIndex] = seed;
+    } else {
+      seeds.push(seed);
+    }
+    await this.saveSetting(this.WALLET_SEEDS_KEY, seeds);
+  }
+
+  async getWalletSeed(walletGroupId: string): Promise<StoredWalletSeed | null> {
+    const seeds = await this.getAllWalletSeeds();
+    return seeds.find(s => s.walletGroupId === walletGroupId) || null;
+  }
+
+  async getAllWalletSeeds(): Promise<StoredWalletSeed[]> {
+    const stored = await this.getSetting<StoredWalletSeed[]>(this.WALLET_SEEDS_KEY);
+    return stored || [];
+  }
+
+  async deleteWalletSeed(walletGroupId: string): Promise<void> {
+    const seeds = await this.getAllWalletSeeds();
+    const filtered = seeds.filter(s => s.walletGroupId !== walletGroupId);
+    await this.saveSetting(this.WALLET_SEEDS_KEY, filtered);
+  }
+
+  async clearAllWalletSeeds(): Promise<void> {
+    await this.deleteSetting(this.WALLET_SEEDS_KEY);
+  }
+}
+
+export const clientStorage = new ClientStorage();
