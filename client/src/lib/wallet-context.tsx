@@ -180,7 +180,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             setHasSoftWalletSetup(false);
             setSoftWallets([]);
             
-            // Only load hard wallet data
+            // Only load hard wallet data - but don't display until device connects
             if (hardSetup) {
               const mappedHardWallets: Wallet[] = hardWalletData.map(w => ({
                 id: w.id,
@@ -193,10 +193,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 label: w.label,
               }));
               setHardWallets(mappedHardWallets);
-              if (currentMode === "hard_wallet") {
-                await hardwareWallet.reconnectFromStorage();
-                setWallets(mappedHardWallets);
-              }
+              // In hard wallet mode, don't set active wallets until device is connected
+              // User needs to click "Connect" first
             }
             return;
           }
@@ -221,7 +219,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         }
         
-        // Load hard wallet data if it's set up
+        // Load hard wallet data if it's set up - but don't display until device connects
         if (hardSetup && hardWalletData.length > 0) {
           const mappedWallets: Wallet[] = hardWalletData.map(w => ({
             id: w.id,
@@ -234,11 +232,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             label: w.label,
           }));
           setHardWallets(mappedWallets);
-          // Set as active wallets if in hard wallet mode
-          if (currentMode === "hard_wallet") {
-            await hardwareWallet.reconnectFromStorage();
-            setWallets(mappedWallets);
-          }
+          // In hard wallet mode, don't set active wallets until device is connected
+          // User needs to click "Connect" first - wallets will be loaded when device connects
         }
       } catch (err) {
         console.error("Failed to initialize storage:", err);
@@ -542,6 +537,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   
   // Computed value for whether current mode has a wallet set up
   const currentModeHasWallet = walletMode === "soft_wallet" ? hasSoftWalletSetup : hasHardWalletSetup;
+
+  // When device connects in hard wallet mode, load the cached hard wallets
+  useEffect(() => {
+    if (walletMode === "hard_wallet" && isConnected && wallets.length === 0 && hardWallets.length > 0) {
+      setWallets(hardWallets);
+    }
+  }, [walletMode, isConnected, wallets.length, hardWallets]);
 
   const connectLedger = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
