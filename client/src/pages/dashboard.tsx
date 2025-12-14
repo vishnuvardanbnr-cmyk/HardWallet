@@ -748,12 +748,16 @@ export default function Dashboard() {
     });
   }, [sortedEnabledAssets, selectedChainForList]);
 
-  // Auto-select first chain when enabledChains changes and no chain is selected
+  // Auto-select first chain when wallets are available and no chain is selected
   useEffect(() => {
-    if (enabledChains.length > 0 && selectedChainForList === null) {
-      setSelectedChainForList(enabledChains[0]);
+    if (displayWallets.length > 0 && selectedChainForList === null) {
+      const firstWallet = displayWallets[0];
+      const firstChain = chains.find(c => c.id === firstWallet.chainId);
+      if (firstChain) {
+        setSelectedChainForList(firstChain.symbol);
+      }
     }
-  }, [enabledChains, selectedChainForList]);
+  }, [displayWallets, chains, selectedChainForList]);
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -875,25 +879,21 @@ export default function Dashboard() {
         <div className="flex mt-4">
           {/* Left Chain Sidebar */}
           <div className="w-16 flex flex-col items-center gap-2 py-4 border-r">
-            {enabledChains.slice(0, 8).map((symbol) => {
-              const chain = chains.find(c => c.symbol === symbol);
-              return (
+            {/* Show chains that have wallets */}
+            {chains
+              .filter(chain => displayWallets.some(w => w.chainId === chain.id))
+              .map((chain) => (
                 <button
-                  key={symbol}
-                  onClick={() => setSelectedChainForList(symbol)}
+                  key={chain.symbol}
+                  onClick={() => setSelectedChainForList(chain.symbol)}
                   className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                    selectedChainForList === symbol ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent'
+                    selectedChainForList === chain.symbol ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent'
                   }`}
-                  title={chain?.name || symbol}
+                  title={chain.name}
                 >
-                  {chain ? (
-                    <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="sm" />
-                  ) : (
-                    <span className="text-xs font-bold">{symbol.slice(0, 2)}</span>
-                  )}
+                  <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="sm" />
                 </button>
-              );
-            })}
+              ))}
           </div>
 
           {/* Right Content - Token List */}
@@ -1037,133 +1037,91 @@ export default function Dashboard() {
             </DialogContent>
           </Dialog>
 
-          {/* Token List */}
-          {isLoadingAssets ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center gap-4 p-4 rounded-lg bg-card border">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="flex-1">
-                    <Skeleton className="h-4 w-24 mb-2" />
-                    <Skeleton className="h-3 w-16" />
-                  </div>
-                  <div className="text-right">
-                    <Skeleton className="h-4 w-20 mb-2" />
-                    <Skeleton className="h-3 w-12" />
-                  </div>
+          {/* Wallet List for Selected Chain */}
+          {(() => {
+            const selectedChain = chains.find(c => c.symbol === selectedChainForList);
+            const walletsForChain = selectedChain 
+              ? displayWallets.filter(w => w.chainId === selectedChain.id)
+              : [];
+            
+            // Get price change for this chain from topAssets
+            const chainAsset = topAssets.find(a => {
+              const assetSymbol = COINGECKO_ID_TO_CHAIN_SYMBOL[a.id];
+              return assetSymbol === selectedChainForList;
+            });
+            const priceChange = chainAsset?.priceChangePercentage24h || 0;
+
+            if (!selectedChain) {
+              return (
+                <div className="text-center py-12">
+                  <Wallet className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">Select a chain from the sidebar</p>
                 </div>
-              ))}
-            </div>
-          ) : assetsForSelectedChain.length === 0 ? (
-            <div className="text-center py-12">
-              <Settings className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground">No assets enabled</p>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">
-                Enable assets to track in Manage Crypto
-              </p>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/manage-crypto">Manage Crypto</Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {assetsForSelectedChain.map((asset) => {
-                const { wallet, chain } = getWalletForAsset(asset);
-                const parentChain = TOKEN_PARENT_CHAIN[asset.id];
-                const isToken = !!parentChain;
-                const displaySymbol = isToken ? asset.symbol.toUpperCase() : chain?.symbol || asset.symbol.toUpperCase();
-                const effectiveBalance = isToken && tokenBalances[asset.id] ? tokenBalances[asset.id] : (wallet ? wallet.balance : "0");
-                const balance = parseFloat(effectiveBalance);
-                const usdValue = balance * (asset.currentPrice || 0);
+              );
+            }
 
-                return (
-                  <div 
-                    key={asset.id}
-                    onClick={() => {
-                      if (wallet && chain) {
-                        setSelectedWalletChain({ wallet, chain });
-                        setWalletDetailOpen(true);
-                      }
-                    }}
-                    className="flex items-center gap-4 p-4 rounded-lg bg-card border hover:bg-accent/50 transition-colors cursor-pointer"
-                    data-testid={`token-row-${asset.id}`}
-                  >
-                    {/* Token Icon */}
-                    <div className="relative">
-                      {(asset.image || CRYPTO_ICONS[asset.id]) ? (
-                        <img
-                          src={asset.image || CRYPTO_ICONS[asset.id] || ''}
-                          alt={asset.name}
-                          className="h-10 w-10 rounded-full bg-muted"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : chain ? (
-                        <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="md" />
-                      ) : (
-                        <div className="h-10 w-10 rounded-full bg-muted" />
-                      )}
-                    </div>
+            if (walletsForChain.length === 0) {
+              return (
+                <div className="text-center py-12">
+                  <Wallet className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">No wallets for {selectedChain.name}</p>
+                </div>
+              );
+            }
 
-                    {/* Token Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium truncate">{asset.name}</h3>
-                        <span
-                          className={`text-xs font-medium ${
-                            asset.priceChangePercentage24h >= 0
-                              ? "text-green-600 dark:text-green-400"
-                              : "text-red-600 dark:text-red-400"
-                          }`}
-                        >
-                          {asset.priceChangePercentage24h >= 0 ? "+" : ""}{asset.priceChangePercentage24h.toFixed(1)}%
-                        </span>
+            return (
+              <div className="space-y-2">
+                {walletsForChain.map((wallet) => {
+                  const balance = parseFloat(wallet.balance);
+                  const usdValue = calculateUSDValue(wallet.balance, selectedChain.symbol, prices);
+
+                  return (
+                    <Link 
+                      key={wallet.id}
+                      href={`/wallet/${selectedChain.id}`}
+                    >
+                      <div 
+                        className="flex items-center gap-4 p-4 rounded-lg bg-card border hover:bg-accent/50 transition-colors cursor-pointer"
+                        data-testid={`wallet-row-${wallet.id}`}
+                      >
+                        {/* Chain Icon */}
+                        <ChainIcon symbol={selectedChain.symbol} iconColor={selectedChain.iconColor} size="md" />
+
+                        {/* Wallet Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium truncate">{selectedChain.name}</h3>
+                            <span
+                              className={`text-xs font-medium ${
+                                priceChange >= 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(1)}%
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {selectedChain.symbol}
+                          </p>
+                        </div>
+
+                        {/* Balance & Value */}
+                        <div className="text-right">
+                          <p className="font-medium" data-testid={`text-value-${wallet.id}`}>
+                            {formatUSD(usdValue)}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatBalance(wallet.balance, 4)} {selectedChain.symbol}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {displaySymbol}
-                        {parentChain && <span className="ml-1 opacity-70">on {parentChain}</span>}
-                      </p>
-                    </div>
-
-                    {/* Balance & Value */}
-                    <div className="text-right">
-                      <p className="font-medium" data-testid={`text-value-${asset.id}`}>
-                        {formatUSD(usdValue)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatBalance(effectiveBalance)} {displaySymbol}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Custom Tokens */}
-              {customTokens.map((token) => {
-                const balance = customTokenBalances[token.id] || "0";
-                return (
-                  <div 
-                    key={token.id} 
-                    className="flex items-center gap-4 p-4 rounded-lg bg-card border"
-                    data-testid={`token-row-custom-${token.id}`}
-                  >
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold">
-                      {token.symbol.slice(0, 2)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium truncate">{token.name}</h3>
-                        <Badge variant="outline" className="text-xs">Custom</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{token.symbol} on {token.chainId}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{formatBalance(balance, 4)} {token.symbol}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
