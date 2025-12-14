@@ -128,7 +128,7 @@ let cachedTopAssets: TopAsset[] = [];
 let lastTopAssetsFetchTime = 0;
 const TOP_ASSETS_CACHE_DURATION = 5 * 60 * 1000;
 
-export async function fetchTopAssets(limit: number = 20): Promise<TopAsset[]> {
+export async function fetchTopAssets(limit: number = 50): Promise<TopAsset[]> {
   const now = Date.now();
   if (now - lastTopAssetsFetchTime < TOP_ASSETS_CACHE_DURATION && cachedTopAssets.length > 0) {
     return cachedTopAssets.slice(0, limit);
@@ -138,7 +138,7 @@ export async function fetchTopAssets(limit: number = 20): Promise<TopAsset[]> {
   try {
     const prices = await fetchPrices();
     
-    const assets: TopAsset[] = FALLBACK_TOP_ASSETS.slice(0, limit).map((asset) => ({
+    const assets: TopAsset[] = FALLBACK_TOP_ASSETS.map((asset) => ({
       ...asset,
       currentPrice: prices[asset.symbol] || FALLBACK_PRICES[asset.symbol] || 0,
       priceChangePercentage24h: 0,
@@ -181,7 +181,7 @@ function getFallbackTopAssets(limit: number): TopAsset[] {
     UNI: 13,
   };
 
-  return FALLBACK_TOP_ASSETS.slice(0, limit).map((asset) => ({
+  return FALLBACK_TOP_ASSETS.map((asset) => ({
     ...asset,
     currentPrice: fallbackPrices[asset.symbol] || 0,
     priceChangePercentage24h: 0,
