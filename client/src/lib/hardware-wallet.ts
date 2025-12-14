@@ -3,6 +3,7 @@ import TransportWebHID from "@ledgerhq/hw-transport-webhid";
 import Eth from "@ledgerhq/hw-app-eth";
 import { ethers } from "ethers";
 import { piWallet } from "./pi-wallet";
+import { clientStorage } from "./client-storage";
 
 export type HardwareWalletType = "ledger" | "simulated" | "raspberry_pi" | null;
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "locked" | "unlocked";
@@ -40,12 +41,77 @@ class HardwareWalletService {
   private sessionTimeout: ReturnType<typeof setTimeout> | null = null;
   private sessionTimeoutMs: number = 5 * 60 * 1000; // 5 minutes default
 
-  private async hashPin(pin: string): Promise<string> {
+  private async hashPin(pin: string, salt?: string): Promise<string> {
     const encoder = new TextEncoder();
-    const data = encoder.encode(pin + "securevault-salt");
+    const data = encoder.encode(pin + (salt || "securevault-salt"));
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  private generateSalt(): string {
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    return Array.from(array).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  private async encryptSeed(seed: string, pin: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(pin),
+      { name: "PBKDF2" },
+      false,
+      ["deriveBits", "deriveKey"]
+    );
+    const key = await crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt: encoder.encode("hardwallet-salt"), iterations: 100000, hash: "SHA-256" },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt"]
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      encoder.encode(seed)
+    );
+    const combined = new Uint8Array(iv.length + new Uint8Array(encrypted).length);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+    return btoa(String.fromCharCode(...combined));
+  }
+
+  private async decryptSeed(encryptedSeed: string, pin: string): Promise<string | null> {
+    try {
+      const encoder = new TextEncoder();
+      const combined = new Uint8Array(atob(encryptedSeed).split("").map(c => c.charCodeAt(0)));
+      const iv = combined.slice(0, 12);
+      const encrypted = combined.slice(12);
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(pin),
+        { name: "PBKDF2" },
+        false,
+        ["deriveBits", "deriveKey"]
+      );
+      const key = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: encoder.encode("hardwallet-salt"), iterations: 100000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"]
+      );
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        encrypted
+      );
+      return new TextDecoder().decode(decrypted);
+    } catch {
+      return null;
+    }
   }
 
   getState(): HardwareWalletState {
@@ -214,7 +280,10 @@ class HardwareWalletService {
       this.simulatedSeedPhrase = seedPhrase;
       
       if (pin) {
-        this.simulatedPinHash = await this.hashPin(pin);
+        const salt = this.generateSalt();
+        this.simulatedPinHash = await this.hashPin(pin, salt);
+        const encryptedSeed = await this.encryptSeed(seedPhrase, pin);
+        await clientStorage.saveHardWalletEncryptedSeed(encryptedSeed, this.simulatedPinHash, salt);
       }
 
       this.setState({
@@ -241,7 +310,12 @@ class HardwareWalletService {
       this.setState({ error: "PIN must be 4-6 digits" });
       return false;
     }
-    this.simulatedPinHash = await this.hashPin(pin);
+    const salt = this.generateSalt();
+    this.simulatedPinHash = await this.hashPin(pin, salt);
+    if (this.simulatedSeedPhrase) {
+      const encryptedSeed = await this.encryptSeed(this.simulatedSeedPhrase, pin);
+      await clientStorage.saveHardWalletEncryptedSeed(encryptedSeed, this.simulatedPinHash, salt);
+    }
     return true;
   }
 
@@ -264,14 +338,36 @@ class HardwareWalletService {
         return false;
       }
       
-      if (this.simulatedPinHash) {
+      const storedPinHash = await clientStorage.getHardWalletPinHash();
+      const storedSalt = await clientStorage.getHardWalletPinSalt();
+      const encryptedSeed = await clientStorage.getHardWalletEncryptedSeed();
+      
+      if (storedPinHash && storedSalt && encryptedSeed) {
+        const inputHash = await this.hashPin(pin, storedSalt);
+        if (inputHash !== storedPinHash) {
+          this.setState({ error: "Incorrect PIN" });
+          return false;
+        }
+        const decryptedSeed = await this.decryptSeed(encryptedSeed, pin);
+        if (!decryptedSeed) {
+          this.setState({ error: "Failed to decrypt wallet" });
+          return false;
+        }
+        this.simulatedSeedPhrase = decryptedSeed;
+        this.simulatedPinHash = storedPinHash;
+      } else if (this.simulatedPinHash) {
         const inputHash = await this.hashPin(pin);
         if (inputHash !== this.simulatedPinHash) {
           this.setState({ error: "Incorrect PIN" });
           return false;
         }
       } else {
-        this.simulatedPinHash = await this.hashPin(pin);
+        const salt = this.generateSalt();
+        this.simulatedPinHash = await this.hashPin(pin, salt);
+        if (this.simulatedSeedPhrase) {
+          const encrypted = await this.encryptSeed(this.simulatedSeedPhrase, pin);
+          await clientStorage.saveHardWalletEncryptedSeed(encrypted, this.simulatedPinHash, salt);
+        }
       }
       
       this.setState({ status: "unlocked" });
@@ -563,6 +659,24 @@ class HardwareWalletService {
       }
     }
     return this.getSeedPhrase();
+  }
+
+  async hasStoredHardWallet(): Promise<boolean> {
+    return await clientStorage.hasHardWalletEncryptedSeed();
+  }
+
+  async reconnectFromStorage(): Promise<boolean> {
+    const hasStored = await clientStorage.hasHardWalletEncryptedSeed();
+    if (!hasStored) {
+      return false;
+    }
+    this.setState({
+      type: "simulated",
+      status: "connected",
+      deviceName: "Simulated Hardware Wallet",
+      error: null,
+    });
+    return true;
   }
 }
 

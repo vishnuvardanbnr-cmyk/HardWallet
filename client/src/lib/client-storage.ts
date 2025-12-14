@@ -373,6 +373,7 @@ class ClientStorage {
   async clearHardWallet(): Promise<void> {
     await this.deleteSetting(this.HARD_WALLET_SETUP_KEY);
     await this.deleteSetting(this.HARD_WALLET_DATA_KEY);
+    await this.clearHardWalletEncryptedSeed();
   }
 
   // Encrypted seed phrase storage for soft wallet (like MetaMask/Trust Wallet)
@@ -407,6 +408,40 @@ class ClientStorage {
     await this.deleteSetting(this.SOFT_WALLET_ENCRYPTED_SEED_KEY);
     await this.deleteSetting(this.SOFT_WALLET_PIN_HASH_KEY);
     await this.deleteSetting(this.SOFT_WALLET_PIN_SALT_KEY);
+  }
+
+  // Encrypted seed phrase storage for hardware wallet (simulated mode)
+  private readonly HARD_WALLET_ENCRYPTED_SEED_KEY = "hardWalletEncryptedSeed";
+  private readonly HARD_WALLET_PIN_HASH_KEY = "hardWalletPinHash";
+  private readonly HARD_WALLET_PIN_SALT_KEY = "hardWalletPinSalt";
+
+  async saveHardWalletEncryptedSeed(encryptedSeed: string, pinHash: string, pinSalt: string): Promise<void> {
+    await this.saveSetting(this.HARD_WALLET_ENCRYPTED_SEED_KEY, encryptedSeed);
+    await this.saveSetting(this.HARD_WALLET_PIN_HASH_KEY, pinHash);
+    await this.saveSetting(this.HARD_WALLET_PIN_SALT_KEY, pinSalt);
+  }
+
+  async getHardWalletEncryptedSeed(): Promise<string | null> {
+    return await this.getSetting<string>(this.HARD_WALLET_ENCRYPTED_SEED_KEY);
+  }
+
+  async getHardWalletPinHash(): Promise<string | null> {
+    return await this.getSetting<string>(this.HARD_WALLET_PIN_HASH_KEY);
+  }
+
+  async getHardWalletPinSalt(): Promise<string | null> {
+    return await this.getSetting<string>(this.HARD_WALLET_PIN_SALT_KEY);
+  }
+
+  async hasHardWalletEncryptedSeed(): Promise<boolean> {
+    const seed = await this.getHardWalletEncryptedSeed();
+    return seed !== null && seed.length > 0;
+  }
+
+  async clearHardWalletEncryptedSeed(): Promise<void> {
+    await this.deleteSetting(this.HARD_WALLET_ENCRYPTED_SEED_KEY);
+    await this.deleteSetting(this.HARD_WALLET_PIN_HASH_KEY);
+    await this.deleteSetting(this.HARD_WALLET_PIN_SALT_KEY);
   }
 
   // Get the next available account index for creating additional wallets

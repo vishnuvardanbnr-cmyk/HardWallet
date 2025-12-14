@@ -284,8 +284,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         const hardSetup = await clientStorage.isHardWalletSetup();
+        const hasStoredHardWallet = await hardwareWallet.hasStoredHardWallet();
         
-        if (hardSetup) {
+        if (hardSetup && hasStoredHardWallet) {
           const hardWalletData = await clientStorage.getHardWalletData();
           const softWalletData = await clientStorage.getSoftWalletData();
           
@@ -295,6 +296,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             hardWalletData.every(w => softAddresses.has(w.address.toLowerCase()));
           
           if (hardWalletData.length > 0 && !hardAddressesMatchSoft) {
+            // Reconnect the hardware wallet from storage
+            await hardwareWallet.reconnectFromStorage();
+            
             const mappedWallets: Wallet[] = hardWalletData.map(w => ({
               id: w.id,
               deviceId: "hard",
