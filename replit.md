@@ -95,6 +95,14 @@ Preferred communication style: Simple, everyday language.
 - **Independent Seed Per Wallet** (Dec 2024): Users can now create additional wallets with either:
   1. Derive from existing seed (uses main seed with different account index)
   2. Generate new seed phrase (creates completely independent wallet with its own seed and PIN)
+- **Balance Caching System** (Dec 2024): Added intelligent balance caching to improve user experience:
+  - Balances are cached in IndexedDB with timestamps for instant display on app load
+  - Cached balances are applied during wallet restoration before any effects run (race-condition-free)
+  - Auto-refresh only fetches balances for wallets showing "0" (skips wallets with cached values)
+  - Stale indicator shows when cache is old (configurable via CACHE_STALE_THRESHOLD_MS)
+  - Dashboard displays "Updated X ago" when cache is stale with visual indicator
+  - Refresh flow preserves cached balances when all API calls fail (graceful degradation)
+  - balanceCacheStatus context provides isStale, lastUpdated, and isRefreshing flags for UI
 
 ## External Dependencies
 
