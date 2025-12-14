@@ -197,188 +197,19 @@ export async function broadcastTransactionWithRpc(
   }
 }
 
-// Multi-chain balance fetching for non-EVM chains
+// Multi-chain balance fetching for non-EVM chains via server proxy
 export async function getNonEvmBalance(address: string, chainSymbol: string): Promise<string> {
   try {
-    switch (chainSymbol) {
-      case 'BTC':
-        return await getBitcoinBalance(address);
-      case 'SOL':
-        return await getSolanaBalance(address);
-      case 'XRP':
-        return await getXrpBalance(address);
-      case 'DOGE':
-        return await getDogecoinBalance(address);
-      case 'ADA':
-        return await getCardanoBalance(address);
-      case 'TRX':
-        return await getTronBalance(address);
-      case 'DOT':
-        return await getPolkadotBalance(address);
-      case 'LTC':
-        return await getLitecoinBalance(address);
-      case 'BCH':
-        return await getBitcoinCashBalance(address);
-      default:
-        return "0";
-    }
+    const response = await fetch(`/api/balance/${chainSymbol}/${address}`, {
+      signal: AbortSignal.timeout(15000)
+    });
+    
+    if (!response.ok) return "0";
+    
+    const data = await response.json();
+    return data.balance || "0";
   } catch (error) {
     console.error(`Failed to get ${chainSymbol} balance:`, error);
-    return "0";
-  }
-}
-
-async function getBitcoinBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch(`https://blockchain.info/q/addressbalance/${address}?confirmations=1`);
-    if (!response.ok) return "0";
-    const satoshis = await response.text();
-    const btc = parseInt(satoshis) / 100000000;
-    return btc.toString();
-  } catch {
-    return "0";
-  }
-}
-
-async function getSolanaBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch('https://api.mainnet-beta.solana.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getBalance',
-        params: [address]
-      })
-    });
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.result?.value) {
-      const sol = data.result.value / 1000000000;
-      return sol.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getXrpBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch('https://s1.ripple.com:51234', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        method: 'account_info',
-        params: [{ account: address, ledger_index: 'validated' }]
-      })
-    });
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.result?.account_data?.Balance) {
-      const xrp = parseInt(data.result.account_data.Balance) / 1000000;
-      return xrp.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getDogecoinBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch(`https://dogechain.info/api/v1/address/balance/${address}`);
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.balance) {
-      return data.balance.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getCardanoBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch(`https://cardano-mainnet.blockfrost.io/api/v0/addresses/${address}`, {
-      headers: { 'project_id': 'mainnetpublic' }
-    });
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.amount) {
-      const lovelace = data.amount.find((a: any) => a.unit === 'lovelace');
-      if (lovelace) {
-        const ada = parseInt(lovelace.quantity) / 1000000;
-        return ada.toString();
-      }
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getTronBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch(`https://api.trongrid.io/v1/accounts/${address}`);
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.data?.[0]?.balance) {
-      const trx = data.data[0].balance / 1000000;
-      return trx.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getPolkadotBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch('https://polkadot.api.subscan.io/api/v2/scan/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: address })
-    });
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.data?.account?.balance) {
-      return data.data.account.balance.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getLitecoinBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch(`https://api.blockcypher.com/v1/ltc/main/addrs/${address}/balance`);
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.balance !== undefined) {
-      const ltc = data.balance / 100000000;
-      return ltc.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getBitcoinCashBalance(address: string): Promise<string> {
-  try {
-    const response = await fetch(`https://api.blockcypher.com/v1/bch/main/addrs/${address}/balance`);
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.balance !== undefined) {
-      const bch = data.balance / 100000000;
-      return bch.toString();
-    }
-    return "0";
-  } catch {
     return "0";
   }
 }
