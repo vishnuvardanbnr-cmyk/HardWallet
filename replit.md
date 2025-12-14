@@ -57,6 +57,15 @@ Preferred communication style: Simple, everyday language.
 - Security-focused aesthetic with professional, clean visuals
 
 ## Recent Changes
+- **Complete Multi-Chain Balance Fetching** (Dec 2024): Added balance fetching for all supported blockchains:
+  - Solana (SOL) - via Solana mainnet JSON-RPC
+  - Polkadot (DOT) - via Subscan/Statescan/Polkaholic APIs with fallbacks
+  - XRP - via Ripple's official JSON-RPC endpoint
+  - Dogecoin (DOGE) - via Blockcypher API
+  - Litecoin (LTC) - via Blockcypher API
+  - Bitcoin Cash (BCH) - via Blockchair API
+  - Cardano (ADA) - via Koios API with Blockfrost fallback
+  - All APIs are free public endpoints (no API keys required)
 - **Hard Wallet Balance Fetching Fix** (Dec 2024): Fixed issues where hard wallet balances weren't fetching immediately:
   - Added isRefreshingRef flag to prevent duplicate balance fetch attempts
   - Added lastHardConnectedRef to detect device connection transitions and trigger balance refresh
