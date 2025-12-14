@@ -3,7 +3,7 @@ import type { Chain, Wallet, Transaction, Token } from "@shared/schema";
 import { DEFAULT_CHAINS } from "@shared/schema";
 import { hardwareWallet, type HardwareWalletState, type ConnectionStatus } from "./hardware-wallet";
 import { softWallet, type SoftWalletState } from "./soft-wallet";
-import { clientStorage, type StoredWallet, type StoredTransaction, type CustomToken, type CustomChain } from "./client-storage";
+import { clientStorage, type StoredWallet, type StoredTransaction, type CustomToken, type CustomChain, type CachedBalance } from "./client-storage";
 import { getUniversalBalance } from "./blockchain";
 import { fetchAllTransactions, type ParsedTransaction } from "./explorer-service";
 import { fetchTopAssets, type TopAsset } from "./price-service";
@@ -69,6 +69,7 @@ interface WalletContextType {
   loadCustomChains: () => Promise<void>;
   addCustomChain: (chain: Omit<CustomChain, 'id' | 'addedAt'>) => Promise<CustomChain>;
   removeCustomChain: (id: string) => Promise<void>;
+  balanceCacheStatus: { isStale: boolean; lastUpdated: number | null; isRefreshing: boolean };
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -103,11 +104,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [selectedAccountIndex, setSelectedAccountIndex] = useState<number>(0);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [customChains, setCustomChains] = useState<CustomChain[]>([]);
+  const [balanceCacheStatus, setBalanceCacheStatus] = useState<{ isStale: boolean; lastUpdated: number | null; isRefreshing: boolean }>({
+    isStale: false,
+    lastUpdated: null,
+    isRefreshing: false,
+  });
   
   // Ref to track mode switch operations and prevent race conditions
   const modeSwitchIdRef = useRef<number>(0);
   // Flag to indicate a mode switch is in progress
   const isModeSwitchingRef = useRef<boolean>(false);
+  // Track cache loading per mode - only load once per mode
+  const hasLoadedCacheForModeRef = useRef<{ soft: boolean; hard: boolean }>({ soft: false, hard: false });
 
   // Compute available accounts from wallets (unique account indices with labels)
   const availableAccounts = useMemo(() => {
@@ -209,37 +217,63 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         }
         
+        // Load cached balances to apply immediately
+        const cachedBalances = await clientStorage.getAllCachedBalances();
+        const cachedBalanceMap = new Map<string, string>();
+        cachedBalances.forEach(c => {
+          cachedBalanceMap.set(`${c.address.toLowerCase()}-${c.chainSymbol}`, c.balance);
+        });
+        
+        // Update cache status
+        const lastRefresh = await clientStorage.getLastFullRefresh();
+        if (lastRefresh > 0) {
+          const isStale = clientStorage.isCacheStale(lastRefresh);
+          setBalanceCacheStatus({ isStale, lastUpdated: lastRefresh, isRefreshing: false });
+        }
+        
         // Load soft wallet data if it's set up (no contamination)
         if (softSetup && softWalletData.length > 0) {
-          const mappedWallets: Wallet[] = softWalletData.map(w => ({
-            id: w.id,
-            deviceId: "soft",
-            chainId: w.chainId,
-            address: w.address,
-            balance: "0",
-            isActive: true,
-            accountIndex: w.accountIndex ?? 0,
-            label: w.label,
-          }));
+          const mappedWallets: Wallet[] = softWalletData.map(w => {
+            // Apply cached balance if available
+            const cacheKey = `${w.address.toLowerCase()}-${w.chainSymbol}`;
+            const cachedBalance = cachedBalanceMap.get(cacheKey);
+            return {
+              id: w.id,
+              deviceId: "soft",
+              chainId: w.chainId,
+              address: w.address,
+              balance: cachedBalance || "0",
+              isActive: true,
+              accountIndex: w.accountIndex ?? 0,
+              label: w.label,
+            };
+          });
           setSoftWallets(mappedWallets);
           // Set as active wallets if in soft wallet mode
           if (currentMode === "soft_wallet") {
             setWallets(mappedWallets);
+            // Mark cache as loaded for soft mode
+            hasLoadedCacheForModeRef.current.soft = true;
           }
         }
         
         // Load hard wallet data if it's set up - but don't display until device connects
         if (hardSetup && hardWalletData.length > 0) {
-          const mappedWallets: Wallet[] = hardWalletData.map(w => ({
-            id: w.id,
-            deviceId: "hard",
-            chainId: w.chainId,
-            address: w.address,
-            balance: "0",
-            isActive: true,
-            accountIndex: w.accountIndex ?? 0,
-            label: w.label,
-          }));
+          const mappedWallets: Wallet[] = hardWalletData.map(w => {
+            // Apply cached balance if available
+            const cacheKey = `${w.address.toLowerCase()}-${w.chainSymbol}`;
+            const cachedBalance = cachedBalanceMap.get(cacheKey);
+            return {
+              id: w.id,
+              deviceId: "hard",
+              chainId: w.chainId,
+              address: w.address,
+              balance: cachedBalance || "0",
+              isActive: true,
+              accountIndex: w.accountIndex ?? 0,
+              label: w.label,
+            };
+          });
           setHardWallets(mappedWallets);
           // In hard wallet mode, don't set active wallets until device is connected
           // User needs to click "Connect" first - wallets will be loaded when device connects
@@ -528,7 +562,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchedWalletIdsRef.current = new Set();
   }, [walletMode]);
-  
+
   useEffect(() => {
     // Skip automatic fetch if refreshBalances is in progress
     if (isRefreshingRef.current) return;
@@ -988,20 +1022,65 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [chains, selectedChainId, storageInitialized, walletMode]);
 
-  const refreshBalances = useCallback(async () => {
-    // Set refreshing flag to prevent automatic effect from interfering
-    isRefreshingRef.current = true;
-    // Clear the fetched wallet IDs ref to force fresh balance fetches
-    fetchedWalletIdsRef.current = new Set();
+  const loadCachedBalances = useCallback(async () => {
+    const currentWallets = walletMode === "soft_wallet" ? softWallets : hardWallets;
+    if (currentWallets.length === 0 || chains.length === 0) return;
     
     try {
-      // Get current wallets synchronously
+      const cachedBalances = await clientStorage.getAllCachedBalances();
+      if (cachedBalances.length === 0) return;
+      
+      const lastRefresh = await clientStorage.getLastFullRefresh();
+      const isStale = lastRefresh > 0 ? clientStorage.isCacheStale(lastRefresh) : true;
+      
+      setBalanceCacheStatus(prev => ({
+        ...prev,
+        isStale,
+        lastUpdated: lastRefresh || null,
+      }));
+      
+      const updatedWallets = currentWallets.map(wallet => {
+        const chain = chains.find(c => c.id === wallet.chainId);
+        if (!chain) return wallet;
+        
+        const cached = cachedBalances.find(
+          c => c.address.toLowerCase() === wallet.address.toLowerCase() && c.chainSymbol === chain.symbol
+        );
+        
+        if (cached) {
+          return { ...wallet, balance: cached.balance };
+        }
+        return wallet;
+      });
+      
+      setWallets([...updatedWallets]);
+      if (walletMode === "soft_wallet") {
+        setSoftWallets([...updatedWallets]);
+      } else {
+        setHardWallets([...updatedWallets]);
+      }
+    } catch (err) {
+      console.error("Failed to load cached balances:", err);
+    }
+  }, [walletMode, softWallets, hardWallets, chains]);
+
+  const refreshBalances = useCallback(async () => {
+    isRefreshingRef.current = true;
+    fetchedWalletIdsRef.current = new Set();
+    
+    setBalanceCacheStatus(prev => ({ ...prev, isRefreshing: true }));
+    
+    try {
       const currentWallets = walletMode === "soft_wallet" ? softWallets : hardWallets;
       
       if (currentWallets.length === 0 || chains.length === 0) {
-        // Early exit but flag will be cleared in finally block
+        // No wallets to refresh - clear refreshing but don't update lastUpdated
+        // Keep isStale: false since there's nothing to be stale, but don't claim we just refreshed
+        setBalanceCacheStatus(prev => ({ ...prev, isStale: false, isRefreshing: false }));
         return;
       }
+      
+      const balancesToCache: Array<{ address: string; chainSymbol: string; chainId: number; balance: string }> = [];
       
       const updatedWallets = await Promise.all(
         currentWallets.map(async (wallet) => {
@@ -1011,9 +1090,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
           
           try {
-            // Pass custom RPC URL for custom chains (non-default chains have rpcUrl set)
             const customRpcUrl = !chain.isDefault && chain.rpcUrl ? chain.rpcUrl : undefined;
             const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol, customRpcUrl);
+            
+            balancesToCache.push({
+              address: wallet.address,
+              chainSymbol: chain.symbol,
+              chainId: chain.chainId,
+              balance,
+            });
+            
             return { ...wallet, balance };
           } catch (err) {
             console.error(`Failed to fetch balance for ${wallet.address}:`, err);
@@ -1022,18 +1108,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         })
       );
       
-      // Update wallets state with new balances
-      setWallets([...updatedWallets]);
-      
-      // Also update mode-specific wallet arrays
-      if (walletMode === "soft_wallet") {
-        setSoftWallets([...updatedWallets]);
-      } else {
-        setHardWallets([...updatedWallets]);
+      // Only update wallets if at least one balance was successfully fetched
+      // This preserves cached balances when all fetches fail
+      if (balancesToCache.length > 0) {
+        setWallets([...updatedWallets]);
+        
+        if (walletMode === "soft_wallet") {
+          setSoftWallets([...updatedWallets]);
+        } else {
+          setHardWallets([...updatedWallets]);
+        }
       }
       
-      // Persist to storage
-      if (storageInitialized) {
+      if (storageInitialized && balancesToCache.length > 0) {
+        await clientStorage.setCachedBalances(balancesToCache);
+        
         const storedWalletsForMode: StoredWallet[] = updatedWallets.map(w => {
           const chain = chains.find(c => c.id === w.chainId);
           return {
@@ -1056,11 +1145,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         } else {
           await clientStorage.saveHardWalletData(storedWalletsForMode);
         }
+        
+        // Only mark as fresh if at least one balance was successfully fetched
+        setBalanceCacheStatus({
+          isStale: false,
+          lastUpdated: Date.now(),
+          isRefreshing: false,
+        });
+      } else {
+        // No balances fetched successfully - keep stale state, just clear refreshing
+        setBalanceCacheStatus(prev => ({ ...prev, isRefreshing: false }));
       }
     } catch (err: any) {
       console.error("Failed to refresh balances:", err);
+      setBalanceCacheStatus(prev => ({ ...prev, isRefreshing: false }));
     } finally {
-      // Always clear refreshing flag
       isRefreshingRef.current = false;
     }
   }, [chains, storageInitialized, walletMode, softWallets, hardWallets]);
@@ -1526,6 +1625,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         loadCustomChains,
         addCustomChain,
         removeCustomChain,
+        balanceCacheStatus,
       }}
     >
       {children}

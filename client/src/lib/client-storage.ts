@@ -72,6 +72,20 @@ export interface CustomChain {
   addedAt: string;
 }
 
+export interface CachedBalance {
+  address: string;
+  chainSymbol: string;
+  chainId: number;
+  balance: string;
+  timestamp: number;
+  isStale?: boolean;
+}
+
+export interface BalanceCacheEntry {
+  balances: Record<string, CachedBalance>;
+  lastFullRefresh: number;
+}
+
 class ClientStorage {
   private db: IDBDatabase | null = null;
 
@@ -567,6 +581,107 @@ class ClientStorage {
 
   async clearAllCustomChains(): Promise<void> {
     await this.deleteSetting(this.CUSTOM_CHAINS_KEY);
+  }
+
+  private readonly BALANCE_CACHE_KEY = "balanceCache";
+  private readonly CACHE_STALE_THRESHOLD = 5 * 60 * 1000;
+  private readonly CACHE_EXPIRE_THRESHOLD = 30 * 60 * 1000;
+
+  private getBalanceCacheKey(address: string, chainSymbol: string): string {
+    return `${address.toLowerCase()}-${chainSymbol}`;
+  }
+
+  async getBalanceCache(): Promise<BalanceCacheEntry> {
+    const stored = await this.getSetting<BalanceCacheEntry>(this.BALANCE_CACHE_KEY);
+    return stored || { balances: {}, lastFullRefresh: 0 };
+  }
+
+  async getCachedBalance(address: string, chainSymbol: string): Promise<CachedBalance | null> {
+    const cache = await this.getBalanceCache();
+    const key = this.getBalanceCacheKey(address, chainSymbol);
+    const entry = cache.balances[key];
+    
+    if (!entry) return null;
+    
+    const now = Date.now();
+    const age = now - entry.timestamp;
+    
+    if (age > this.CACHE_EXPIRE_THRESHOLD) {
+      return null;
+    }
+    
+    return {
+      ...entry,
+      isStale: age > this.CACHE_STALE_THRESHOLD,
+    };
+  }
+
+  async setCachedBalance(address: string, chainSymbol: string, chainId: number, balance: string): Promise<void> {
+    const cache = await this.getBalanceCache();
+    const key = this.getBalanceCacheKey(address, chainSymbol);
+    
+    cache.balances[key] = {
+      address: address.toLowerCase(),
+      chainSymbol,
+      chainId,
+      balance,
+      timestamp: Date.now(),
+    };
+    
+    await this.saveSetting(this.BALANCE_CACHE_KEY, cache);
+  }
+
+  async setCachedBalances(balances: Array<{ address: string; chainSymbol: string; chainId: number; balance: string }>): Promise<void> {
+    const cache = await this.getBalanceCache();
+    const now = Date.now();
+    
+    for (const b of balances) {
+      const key = this.getBalanceCacheKey(b.address, b.chainSymbol);
+      cache.balances[key] = {
+        address: b.address.toLowerCase(),
+        chainSymbol: b.chainSymbol,
+        chainId: b.chainId,
+        balance: b.balance,
+        timestamp: now,
+      };
+    }
+    
+    cache.lastFullRefresh = now;
+    await this.saveSetting(this.BALANCE_CACHE_KEY, cache);
+  }
+
+  async getAllCachedBalances(): Promise<CachedBalance[]> {
+    const cache = await this.getBalanceCache();
+    const now = Date.now();
+    
+    return Object.values(cache.balances).map(entry => ({
+      ...entry,
+      isStale: (now - entry.timestamp) > this.CACHE_STALE_THRESHOLD,
+    })).filter(entry => (now - entry.timestamp) <= this.CACHE_EXPIRE_THRESHOLD);
+  }
+
+  async getLastFullRefresh(): Promise<number> {
+    const cache = await this.getBalanceCache();
+    return cache.lastFullRefresh;
+  }
+
+  async clearBalanceCache(): Promise<void> {
+    await this.deleteSetting(this.BALANCE_CACHE_KEY);
+  }
+
+  isCacheStale(timestamp: number): boolean {
+    return (Date.now() - timestamp) > this.CACHE_STALE_THRESHOLD;
+  }
+
+  getCacheAge(timestamp: number): string {
+    const age = Date.now() - timestamp;
+    const minutes = Math.floor(age / 60000);
+    if (minutes < 1) return "just now";
+    if (minutes === 1) return "1 min ago";
+    if (minutes < 60) return `${minutes} mins ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours === 1) return "1 hour ago";
+    return `${hours} hours ago`;
   }
 }
 

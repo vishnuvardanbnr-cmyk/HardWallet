@@ -43,7 +43,7 @@ import type { Chain, Wallet as WalletType } from "@shared/schema";
 import type { TopAsset } from "@/lib/price-service";
 import { Link, useLocation } from "wouter";
 import { getTokenBalanceForAsset, isTokenAsset, getCustomTokenBalance } from "@/lib/blockchain";
-import type { CustomToken } from "@/lib/client-storage";
+import { clientStorage, type CustomToken } from "@/lib/client-storage";
 
 function formatBalance(balance: string, decimals: number = 18): string {
   const num = parseFloat(balance);
@@ -529,7 +529,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { isConnected, isUnlocked, chains, wallets, refreshBalances, topAssets, enabledAssetIds, isLoadingAssets, refreshTopAssets, createAdditionalWallet, createWalletWithNewSeed, walletMode, isLoading, selectedAccountIndex, setSelectedAccountIndex, availableAccounts, visibleWallets, customTokens } = useWallet();
+  const { isConnected, isUnlocked, chains, wallets, refreshBalances, topAssets, enabledAssetIds, isLoadingAssets, refreshTopAssets, createAdditionalWallet, createWalletWithNewSeed, walletMode, isLoading, selectedAccountIndex, setSelectedAccountIndex, availableAccounts, visibleWallets, customTokens, balanceCacheStatus } = useWallet();
   const { toast } = useToast();
   const [prices, setPrices] = useState<PriceData>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -796,20 +796,32 @@ export default function Dashboard() {
                 {walletMode === "soft_wallet" ? "Soft Wallet" : "Hard Wallet"} Portfolio
               </p>
             </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              data-testid="button-refresh-portfolio"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            </Button>
+            <div className="flex items-center gap-2">
+              {balanceCacheStatus.isStale && balanceCacheStatus.lastUpdated && (
+                <span className="text-xs text-muted-foreground">
+                  Updated {clientStorage.getCacheAge(balanceCacheStatus.lastUpdated)}
+                </span>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleRefresh}
+                disabled={isRefreshing || balanceCacheStatus.isRefreshing}
+                data-testid="button-refresh-portfolio"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing || balanceCacheStatus.isRefreshing ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
           </div>
           <div className="flex flex-wrap items-baseline gap-4">
             <h2 className="text-2xl md:text-4xl font-bold" data-testid="text-portfolio-value">
               {formatUSD(totalUSDValue)}
             </h2>
+            {balanceCacheStatus.isRefreshing && (
+              <span className="text-xs text-muted-foreground animate-pulse">
+                Refreshing...
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
