@@ -633,7 +633,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         : await clientStorage.getHardWalletData();
       
       if (storedWallets.length > 0) {
-        // Load from storage instead of deriving fresh
+        // Load from storage
         const mappedWallets: Wallet[] = storedWallets.map(w => ({
           id: w.id,
           deviceId: walletMode === "soft_wallet" ? "soft" : "hard",
@@ -644,6 +644,69 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           accountIndex: w.accountIndex ?? 0,
           label: w.label,
         }));
+        
+        // Check for new chains that need addresses derived
+        const currentChains = chains.length > 0 ? chains : DEFAULT_CHAINS.map((c, i) => ({
+          ...c,
+          id: `chain-${i}`,
+        }));
+        
+        // Get unique account indices from stored wallets
+        const accountIndices = [...new Set(storedWallets.map(w => w.accountIndex ?? 0))];
+        
+        // Find chains that don't have wallets yet (for account index 0)
+        const existingChainIds = new Set(storedWallets.filter(w => (w.accountIndex ?? 0) === 0).map(w => w.chainId));
+        const missingChains = currentChains.filter(c => !existingChainIds.has(c.id));
+        
+        if (missingChains.length > 0) {
+          // Derive addresses for missing chains
+          let mnemonic: string | null = null;
+          if (walletMode === "soft_wallet") {
+            mnemonic = softWallet.getSeedPhrase();
+          } else {
+            mnemonic = await hardwareWallet.getSeedPhraseFromDevice();
+          }
+          
+          if (mnemonic) {
+            const missingSymbols = missingChains.map(c => c.symbol);
+            const newAddresses = await deriveAllAddresses(mnemonic, missingSymbols, 0);
+            
+            for (const derived of newAddresses) {
+              const chain = missingChains.find(c => c.symbol === derived.chainSymbol);
+              if (!chain || !derived.address) continue;
+              
+              const walletId = `wallet-${chain.id}-${derived.address.slice(0, 8)}`;
+              const newWallet: Wallet = {
+                id: walletId,
+                deviceId: walletMode === "soft_wallet" ? "soft" : "hard",
+                chainId: chain.id,
+                address: derived.address,
+                balance: "0",
+                isActive: true,
+                accountIndex: 0,
+              };
+              mappedWallets.push(newWallet);
+              
+              // Save new wallet to storage
+              const storedWallet: StoredWallet = {
+                id: walletId,
+                address: derived.address,
+                chainId: chain.id,
+                chainName: chain.name,
+                chainSymbol: chain.symbol,
+                balance: "0",
+                path: derived.path,
+                lastUpdated: new Date().toISOString(),
+                accountIndex: 0,
+              };
+              if (walletMode === "soft_wallet") {
+                await clientStorage.saveSoftWalletData([...storedWallets, storedWallet]);
+              } else {
+                await clientStorage.saveHardWalletData([...storedWallets, storedWallet]);
+              }
+            }
+          }
+        }
         
         setWallets(mappedWallets);
         if (walletMode === "soft_wallet") {
