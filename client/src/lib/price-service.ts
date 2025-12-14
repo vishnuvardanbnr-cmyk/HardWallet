@@ -69,51 +69,7 @@ async function fetchFromDefiLlama(): Promise<PriceData | null> {
     }
 
     return Object.keys(prices).length > 0 ? prices : null;
-  } catch (error) {
-    console.warn("DefiLlama fetch error:", error);
-    return null;
-  }
-}
-
-async function fetchFromCoinGecko(): Promise<PriceData | null> {
-  try {
-    const COINGECKO_IDS: Record<string, string> = {
-      ETH: "ethereum",
-      BNB: "binancecoin",
-      MATIC: "matic-network",
-      AVAX: "avalanche-2",
-      ARB: "arbitrum",
-      BTC: "bitcoin",
-      SOL: "solana",
-      XRP: "ripple",
-      DOGE: "dogecoin",
-      ADA: "cardano",
-      TRX: "tron",
-      DOT: "polkadot",
-      LTC: "litecoin",
-      BCH: "bitcoin-cash",
-    };
-
-    const ids = Object.values(COINGECKO_IDS).join(",");
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const prices: PriceData = {};
-
-    for (const [symbol, coinId] of Object.entries(COINGECKO_IDS)) {
-      if (data[coinId]?.usd) {
-        prices[symbol] = data[coinId].usd;
-      }
-    }
-
-    return Object.keys(prices).length > 0 ? prices : null;
-  } catch (error) {
-    console.warn("CoinGecko fetch error:", error);
+  } catch {
     return null;
   }
 }
@@ -124,21 +80,9 @@ export async function fetchPrices(): Promise<PriceData> {
     return cachedPrices;
   }
 
-  let prices: PriceData = {};
-  
-  const defiLlamaPrices = await fetchFromDefiLlama();
-  if (defiLlamaPrices) {
-    prices = { ...prices, ...defiLlamaPrices };
-  }
-  
-  if (Object.keys(prices).length < 5) {
-    const geckoPrice = await fetchFromCoinGecko();
-    if (geckoPrice) {
-      prices = { ...prices, ...geckoPrice };
-    }
-  }
+  const prices = await fetchFromDefiLlama();
 
-  if (Object.keys(prices).length > 0) {
+  if (prices && Object.keys(prices).length > 0) {
     cachedPrices = { ...FALLBACK_PRICES, ...prices };
     lastFetchTime = now;
     return cachedPrices;
@@ -220,8 +164,7 @@ export async function fetchTopAssets(limit: number = 20): Promise<TopAsset[]> {
     cachedTopAssets = assets;
     lastTopAssetsFetchTime = now;
     return assets;
-  } catch (error) {
-    console.warn("Top assets fetch error:", error);
+  } catch {
     return getFallbackTopAssets(limit);
   }
 }

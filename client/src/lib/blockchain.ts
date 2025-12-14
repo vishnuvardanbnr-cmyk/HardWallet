@@ -148,7 +148,6 @@ export async function getTokenBalance(
       decimals: Number(decimals),
     };
   } catch (error) {
-    console.error("Failed to get token balance:", error);
     return null;
   }
 }
@@ -176,7 +175,6 @@ export async function getTokenInfo(
       decimals: Number(decimals),
     };
   } catch (error) {
-    console.error("Failed to get token info:", error);
     return null;
   }
 }
@@ -199,24 +197,11 @@ export async function broadcastTransactionWithRpc(
   }
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout: number = 10000): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 async function getBitcoinBalance(address: string): Promise<string> {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `https://blockstream.info/api/address/${address}`,
-      {},
-      10000
+      { signal: AbortSignal.timeout(8000) }
     );
     if (!response.ok) return "0";
     const data = await response.json();
@@ -229,112 +214,11 @@ async function getBitcoinBalance(address: string): Promise<string> {
   }
 }
 
-async function getSolanaBalance(address: string): Promise<string> {
-  const endpoints = [
-    'https://rpc.ankr.com/solana',
-    'https://solana.public-rpc.com',
-    'https://api.mainnet-beta.solana.com',
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetchWithTimeout(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'getBalance',
-          params: [address]
-        }),
-      }, 8000);
-
-      if (!response.ok) continue;
-      const data = await response.json();
-      if (data.result?.value !== undefined) {
-        const sol = data.result.value / 1000000000;
-        return sol.toString();
-      }
-    } catch {
-      continue;
-    }
-  }
-  return "0";
-}
-
-async function getXrpBalance(address: string): Promise<string> {
-  const endpoints = [
-    'https://xrplcluster.com',
-    'https://s1.ripple.com:51234',
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetchWithTimeout(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'account_info',
-          params: [{ account: address, ledger_index: 'validated' }]
-        }),
-      }, 8000);
-
-      if (!response.ok) continue;
-      const data = await response.json();
-      if (data.result?.account_data?.Balance) {
-        const xrp = parseInt(data.result.account_data.Balance) / 1000000;
-        return xrp.toString();
-      }
-    } catch {
-      continue;
-    }
-  }
-  return "0";
-}
-
-async function getDogecoinBalance(address: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout(
-      `https://dogechain.info/api/v1/address/balance/${address}`,
-      {},
-      8000
-    );
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.balance) {
-      return data.balance.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getCardanoBalance(address: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout(
-      `https://api.koios.rest/api/v1/address_info?_address=${address}`,
-      { headers: { 'Accept': 'application/json' } },
-      10000
-    );
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (Array.isArray(data) && data[0]?.balance) {
-      const ada = parseInt(data[0].balance) / 1000000;
-      return ada.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
 async function getTronBalance(address: string): Promise<string> {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `https://api.trongrid.io/v1/accounts/${address}`,
-      {},
-      8000
+      { signal: AbortSignal.timeout(8000) }
     );
     if (!response.ok) return "0";
     const data = await response.json();
@@ -348,72 +232,11 @@ async function getTronBalance(address: string): Promise<string> {
   }
 }
 
-async function getPolkadotBalance(address: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout(
-      'https://polkadot.api.subscan.io/api/v2/scan/search',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: address }),
-      },
-      8000
-    );
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.data?.account?.balance) {
-      return data.data.account.balance.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getLitecoinBalance(address: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout(
-      `https://api.blockcypher.com/v1/ltc/main/addrs/${address}/balance`,
-      {},
-      8000
-    );
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.balance !== undefined) {
-      const ltc = data.balance / 100000000;
-      return ltc.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
-async function getBitcoinCashBalance(address: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout(
-      `https://api.blockcypher.com/v1/bch/main/addrs/${address}/balance`,
-      {},
-      8000
-    );
-    if (!response.ok) return "0";
-    const data = await response.json();
-    if (data.balance !== undefined) {
-      const bch = data.balance / 100000000;
-      return bch.toString();
-    }
-    return "0";
-  } catch {
-    return "0";
-  }
-}
-
 async function getCosmosBalance(address: string): Promise<string> {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `https://rest.cosmos.directory/cosmoshub/cosmos/bank/v1beta1/balances/${address}`,
-      {},
-      8000
+      { signal: AbortSignal.timeout(8000) }
     );
     if (!response.ok) return "0";
     const data = await response.json();
@@ -430,10 +253,9 @@ async function getCosmosBalance(address: string): Promise<string> {
 
 async function getOsmosisBalance(address: string): Promise<string> {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `https://rest.cosmos.directory/osmosis/cosmos/bank/v1beta1/balances/${address}`,
-      {},
-      8000
+      { signal: AbortSignal.timeout(8000) }
     );
     if (!response.ok) return "0";
     const data = await response.json();
@@ -452,26 +274,20 @@ export async function getNonEvmBalance(address: string, chainSymbol: string): Pr
   switch (chainSymbol.toUpperCase()) {
     case 'BTC':
       return await getBitcoinBalance(address);
-    case 'SOL':
-      return await getSolanaBalance(address);
-    case 'XRP':
-      return await getXrpBalance(address);
-    case 'DOGE':
-      return await getDogecoinBalance(address);
-    case 'ADA':
-      return await getCardanoBalance(address);
     case 'TRX':
       return await getTronBalance(address);
-    case 'DOT':
-      return await getPolkadotBalance(address);
-    case 'LTC':
-      return await getLitecoinBalance(address);
-    case 'BCH':
-      return await getBitcoinCashBalance(address);
     case 'ATOM':
       return await getCosmosBalance(address);
     case 'OSMO':
       return await getOsmosisBalance(address);
+    case 'SOL':
+    case 'XRP':
+    case 'DOGE':
+    case 'ADA':
+    case 'DOT':
+    case 'LTC':
+    case 'BCH':
+      return "0";
     default:
       return "0";
   }

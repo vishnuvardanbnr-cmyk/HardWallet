@@ -53,23 +53,10 @@ const BLOCKSCOUT_APIS: Record<number, string> = {
   137: "https://polygon.blockscout.com/api",
   42161: "https://arbitrum.blockscout.com/api",
   10: "https://optimism.blockscout.com/api",
-  43114: "https://snowtrace.io/api",
 };
 
 let fetchCache: Map<string, { data: ParsedTransaction[]; timestamp: number }> = new Map();
 const CACHE_DURATION = 60000;
-
-async function fetchWithTimeout(url: string, timeout: number = 10000): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 async function fetchFromBlockscout(
   address: string,
@@ -83,7 +70,7 @@ async function fetchFromBlockscout(
 
   try {
     const url = `${apiUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
-    const response = await fetchWithTimeout(url, 10000);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
     
     if (!response.ok) return [];
     
@@ -112,8 +99,7 @@ async function fetchFromBlockscout(
         isTokenTransfer: false,
       };
     });
-  } catch (error) {
-    console.warn(`Blockscout fetch failed for chain ${chainId}:`, error);
+  } catch {
     return [];
   }
 }
@@ -124,9 +110,9 @@ async function fetchBtcTransactions(
   walletChainId: string
 ): Promise<ParsedTransaction[]> {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetch(
       `https://blockstream.info/api/address/${address}/txs`,
-      10000
+      { signal: AbortSignal.timeout(10000) }
     );
     if (!response.ok) return [];
     
@@ -169,54 +155,7 @@ async function fetchBtcTransactions(
         isTokenTransfer: false,
       };
     });
-  } catch (error) {
-    console.warn("BTC transaction fetch failed:", error);
-    return [];
-  }
-}
-
-async function fetchSolanaTransactions(
-  address: string,
-  walletId: string,
-  walletChainId: string
-): Promise<ParsedTransaction[]> {
-  try {
-    const response = await fetchWithTimeout('https://api.mainnet-beta.solana.com', 8000);
-    
-    const signatureResponse = await fetch('https://api.mainnet-beta.solana.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getSignaturesForAddress',
-        params: [address, { limit: 20 }]
-      }),
-    });
-
-    if (!signatureResponse.ok) return [];
-    const sigData = await signatureResponse.json();
-    
-    if (!sigData.result || !Array.isArray(sigData.result)) return [];
-
-    return sigData.result.slice(0, 20).map((sig: any) => ({
-      id: `sol-${sig.signature}`,
-      txHash: sig.signature,
-      fromAddress: address,
-      toAddress: "Unknown",
-      amount: "0",
-      timestamp: sig.blockTime 
-        ? new Date(sig.blockTime * 1000).toISOString()
-        : new Date().toISOString(),
-      type: "send" as const,
-      status: sig.err ? "failed" : "confirmed",
-      chainId: walletChainId,
-      tokenSymbol: "SOL",
-      walletId: walletId,
-      isTokenTransfer: false,
-    }));
-  } catch (error) {
-    console.warn("Solana transaction fetch failed:", error);
+  } catch {
     return [];
   }
 }
@@ -242,9 +181,6 @@ export async function fetchTransactionHistory(
     switch (chainSymbol.toUpperCase()) {
       case 'BTC':
         transactions = await fetchBtcTransactions(address, walletId, walletChainId);
-        break;
-      case 'SOL':
-        transactions = await fetchSolanaTransactions(address, walletId, walletChainId);
         break;
       default:
         transactions = [];
@@ -281,7 +217,7 @@ export async function fetchTokenTransfers(
 
   try {
     const url = `${apiUrl}?module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`;
-    const response = await fetchWithTimeout(url, 10000);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
 
     if (!response.ok) return [];
 
@@ -314,8 +250,7 @@ export async function fetchTokenTransfers(
 
     fetchCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
     return parsed;
-  } catch (error) {
-    console.warn(`Token transfers fetch failed for chain ${chainId}:`, error);
+  } catch {
     return [];
   }
 }
