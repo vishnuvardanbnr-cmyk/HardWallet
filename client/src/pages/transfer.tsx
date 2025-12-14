@@ -422,7 +422,7 @@ export default function Transfer() {
   
   console.log("[Transfer] chainParam:", chainParam, "search:", searchString);
 
-  if (!isConnected || !isUnlocked) {
+  if (wallets.length === 0) {
     return (
       <div className="p-6">
         <h1 className="mb-6 text-3xl font-bold">Send / Receive</h1>
