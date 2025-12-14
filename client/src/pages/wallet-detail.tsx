@@ -177,13 +177,13 @@ export default function WalletDetail() {
   const searchParams = new URLSearchParams(searchString);
   const assetId = searchParams.get('asset');
   
-  const { chains, wallets, transactions, refreshBalances, refreshTransactions, isLoadingTransactions } = useWallet();
+  const { chains, visibleWallets, transactions, refreshBalances, refreshTransactions, isLoadingTransactions } = useWallet();
   const { toast } = useToast();
   const [prices, setPrices] = useState<PriceData>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const chain = chains.find(c => c.id === chainId);
-  const wallet = wallets.find(w => w.chainId === chainId);
+  const wallet = visibleWallets.find(w => w.chainId === chainId);
   
   const assetInfo = assetId ? ASSET_INFO[assetId] : null;
   const displayName = assetInfo?.name || chain?.name || '';

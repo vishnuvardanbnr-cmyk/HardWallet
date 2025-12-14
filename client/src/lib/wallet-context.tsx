@@ -589,6 +589,19 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [walletMode, softWallets, hardWallets, hardwareState.status]);
 
+  // Sync wallets array from modeBasedWallets when hard wallet connects or mode changes
+  // This ensures the wallets array is populated for components that depend on it
+  useEffect(() => {
+    if (isModeSwitchingRef.current) return; // Don't sync during mode switch
+    
+    if (walletMode === "hard_wallet") {
+      const hardConnected = hardwareState.status === "connected" || hardwareState.status === "unlocked";
+      if (hardConnected && hardWallets.length > 0 && wallets.length === 0) {
+        setWallets(hardWallets);
+      }
+    }
+  }, [walletMode, hardwareState.status, hardWallets, wallets.length]);
+
   const connectLedger = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
