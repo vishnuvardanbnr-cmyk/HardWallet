@@ -291,15 +291,15 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
         {/* Mobile: Compact single-row layout */}
         <div className="flex items-center justify-between gap-3 sm:hidden">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            {chain ? (
-              <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="sm" />
-            ) : (
+            {isToken || !chain ? (
               <img
                 src={asset.image || CRYPTO_ICONS[asset.id] || ''}
                 alt={asset.name}
                 className="h-8 w-8 rounded-full bg-muted shrink-0"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
+            ) : (
+              <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="sm" />
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -336,15 +336,15 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
         <div className="hidden sm:block">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-3">
-              {chain ? (
-                <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="md" />
-              ) : (
+              {isToken || !chain ? (
                 <img
                   src={asset.image || CRYPTO_ICONS[asset.id] || ''}
                   alt={asset.name}
                   className="h-8 w-8 rounded-full bg-muted"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
+              ) : (
+                <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="md" />
               )}
               <div className="min-w-0">
                 <h3 className="font-semibold truncate">{asset.name}</h3>
