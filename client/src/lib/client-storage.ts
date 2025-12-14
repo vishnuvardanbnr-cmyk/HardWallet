@@ -60,6 +60,18 @@ export interface CustomToken {
   addedAt: string;
 }
 
+export interface CustomChain {
+  id: string;
+  name: string;
+  symbol: string;
+  rpcUrl: string;
+  chainId: number;
+  blockExplorer?: string;
+  decimals: number;
+  iconColor?: string;
+  addedAt: string;
+}
+
 class ClientStorage {
   private db: IDBDatabase | null = null;
 
@@ -478,6 +490,48 @@ class ClientStorage {
 
   async clearAllCustomTokens(): Promise<void> {
     await this.deleteSetting(this.CUSTOM_TOKENS_KEY);
+  }
+
+  // Custom chain management
+  private readonly CUSTOM_CHAINS_KEY = "customChains";
+
+  async getCustomChains(): Promise<CustomChain[]> {
+    const stored = await this.getSetting<CustomChain[]>(this.CUSTOM_CHAINS_KEY);
+    return stored || [];
+  }
+
+  async addCustomChain(chain: Omit<CustomChain, 'id' | 'addedAt'>): Promise<CustomChain> {
+    const chains = await this.getCustomChains();
+    const newChain: CustomChain = {
+      ...chain,
+      id: `custom-chain-${chain.chainId}`,
+      addedAt: new Date().toISOString(),
+    };
+    
+    const existingIndex = chains.findIndex(c => c.id === newChain.id);
+    if (existingIndex >= 0) {
+      chains[existingIndex] = newChain;
+    } else {
+      chains.push(newChain);
+    }
+    
+    await this.saveSetting(this.CUSTOM_CHAINS_KEY, chains);
+    return newChain;
+  }
+
+  async removeCustomChain(id: string): Promise<void> {
+    const chains = await this.getCustomChains();
+    const filtered = chains.filter(c => c.id !== id);
+    await this.saveSetting(this.CUSTOM_CHAINS_KEY, filtered);
+  }
+
+  async getCustomChain(id: string): Promise<CustomChain | null> {
+    const chains = await this.getCustomChains();
+    return chains.find(c => c.id === id) || null;
+  }
+
+  async clearAllCustomChains(): Promise<void> {
+    await this.deleteSetting(this.CUSTOM_CHAINS_KEY);
   }
 }
 

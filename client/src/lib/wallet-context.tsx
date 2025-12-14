@@ -3,7 +3,7 @@ import type { Chain, Wallet, Transaction, Token } from "@shared/schema";
 import { DEFAULT_CHAINS } from "@shared/schema";
 import { hardwareWallet, type HardwareWalletState, type ConnectionStatus } from "./hardware-wallet";
 import { softWallet, type SoftWalletState } from "./soft-wallet";
-import { clientStorage, type StoredWallet, type StoredTransaction, type CustomToken } from "./client-storage";
+import { clientStorage, type StoredWallet, type StoredTransaction, type CustomToken, type CustomChain } from "./client-storage";
 import { getUniversalBalance } from "./blockchain";
 import { fetchAllTransactions, type ParsedTransaction } from "./explorer-service";
 import { fetchTopAssets, type TopAsset } from "./price-service";
@@ -65,6 +65,10 @@ interface WalletContextType {
   loadCustomTokens: () => Promise<void>;
   addCustomToken: (token: Omit<CustomToken, 'id' | 'addedAt'>) => Promise<CustomToken>;
   removeCustomToken: (id: string) => Promise<void>;
+  customChains: CustomChain[];
+  loadCustomChains: () => Promise<void>;
+  addCustomChain: (chain: Omit<CustomChain, 'id' | 'addedAt'>) => Promise<CustomChain>;
+  removeCustomChain: (id: string) => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -98,6 +102,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [hardWallets, setHardWallets] = useState<Wallet[]>([]);
   const [selectedAccountIndex, setSelectedAccountIndex] = useState<number>(0);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
+  const [customChains, setCustomChains] = useState<CustomChain[]>([]);
 
   // Compute available accounts from wallets (unique account indices with labels)
   const availableAccounts = useMemo(() => {
@@ -407,11 +412,25 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       ...c,
       id: `chain-${i}`,
     }));
-    setChains(defaultChains);
-    if (defaultChains.length > 0) {
+    
+    // Merge default chains with custom chains
+    const customChainsAsMapped: Chain[] = customChains.map((c) => ({
+      id: c.id,
+      name: c.name,
+      symbol: c.symbol,
+      rpcUrl: c.rpcUrl,
+      chainId: c.chainId,
+      blockExplorer: c.blockExplorer || "",
+      iconColor: c.iconColor || "#6B7280",
+      isDefault: false,
+      decimals: c.decimals,
+    }));
+    
+    setChains([...defaultChains, ...customChainsAsMapped]);
+    if (defaultChains.length > 0 && !selectedChainId) {
       setSelectedChainId(defaultChains[0].id);
     }
-  }, []);
+  }, [customChains]);
 
   useEffect(() => {
     const handleActivity = () => {
@@ -469,7 +488,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           const chain = chains.find(c => c.id === wallet.chainId);
           if (!chain || chain.chainId === 0) return wallet;
           try {
-            const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol);
+            // Pass custom RPC URL for custom chains (non-default chains have rpcUrl set)
+            const customRpcUrl = !chain.isDefault && chain.rpcUrl ? chain.rpcUrl : undefined;
+            const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol, customRpcUrl);
             return { ...wallet, balance };
           } catch {
             return wallet;
@@ -870,7 +891,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
               }
               
               try {
-                const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol);
+                // Pass custom RPC URL for custom chains (non-default chains have rpcUrl set)
+                const customRpcUrl = !chain.isDefault && chain.rpcUrl ? chain.rpcUrl : undefined;
+                const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol, customRpcUrl);
                 return { ...wallet, balance };
               } catch (err) {
                 console.error(`Failed to fetch balance for ${wallet.address}:`, err);
@@ -1082,6 +1105,40 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       loadCustomTokens();
     }
   }, [storageInitialized, loadCustomTokens]);
+
+  const loadCustomChains = useCallback(async () => {
+    try {
+      const chains = await clientStorage.getCustomChains();
+      setCustomChains(chains);
+    } catch (err) {
+      console.error("Failed to load custom chains:", err);
+    }
+  }, []);
+
+  const addCustomChain = useCallback(async (chain: Omit<CustomChain, 'id' | 'addedAt'>): Promise<CustomChain> => {
+    const newChain = await clientStorage.addCustomChain(chain);
+    setCustomChains(prev => {
+      const existingIndex = prev.findIndex(c => c.id === newChain.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = newChain;
+        return updated;
+      }
+      return [...prev, newChain];
+    });
+    return newChain;
+  }, []);
+
+  const removeCustomChain = useCallback(async (id: string): Promise<void> => {
+    await clientStorage.removeCustomChain(id);
+    setCustomChains(prev => prev.filter(c => c.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (storageInitialized) {
+      loadCustomChains();
+    }
+  }, [storageInitialized, loadCustomChains]);
 
   const createAdditionalWallet = useCallback(async (label?: string) => {
     // Check unlock status based on wallet mode
@@ -1354,6 +1411,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         loadCustomTokens,
         addCustomToken,
         removeCustomToken,
+        customChains,
+        loadCustomChains,
+        addCustomChain,
+        removeCustomChain,
       }}
     >
       {children}

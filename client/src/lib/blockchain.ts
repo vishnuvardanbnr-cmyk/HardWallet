@@ -76,9 +76,9 @@ export async function broadcastTransaction(
   }
 }
 
-export async function getBalance(address: string, chainId: number): Promise<string> {
+export async function getBalance(address: string, chainId: number, customRpcUrl?: string): Promise<string> {
   try {
-    const provider = await getProvider(chainId);
+    const provider = await getProvider(chainId, customRpcUrl);
     if (!provider) return "0";
     const balance = await provider.getBalance(address);
     return ethers.formatEther(balance);
@@ -293,9 +293,9 @@ export async function getNonEvmBalance(address: string, chainSymbol: string): Pr
   }
 }
 
-export async function getUniversalBalance(address: string, chainId: number, chainSymbol: string): Promise<string> {
+export async function getUniversalBalance(address: string, chainId: number, chainSymbol: string, customRpcUrl?: string): Promise<string> {
   if (chainId > 0) {
-    return await getBalance(address, chainId);
+    return await getBalance(address, chainId, customRpcUrl);
   } else {
     return await getNonEvmBalance(address, chainSymbol);
   }

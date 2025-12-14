@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { 
   Plus, 
   ExternalLink, 
@@ -35,7 +34,6 @@ import {
 } from "@/components/ui/select";
 import { useWallet } from "@/lib/wallet-context";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ChainIcon } from "@/components/chain-icon";
 import { HardwareStatusCard } from "@/components/hardware-status";
 import { getTokenInfo } from "@/lib/blockchain";
@@ -119,9 +117,10 @@ function ChainCard({ chain, wallet }: { chain: Chain; wallet?: Wallet }) {
   );
 }
 
-function AddChainDialog() {
+function AddChainDialog({ addCustomChain }: { addCustomChain: (chain: Omit<import("@/lib/client-storage").CustomChain, 'id' | 'addedAt'>) => Promise<import("@/lib/client-storage").CustomChain> }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     symbol: "",
@@ -131,45 +130,45 @@ function AddChainDialog() {
     decimals: "18",
   });
 
-  const addChainMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const response = await apiRequest("POST", "/api/chains", {
-        ...data,
-        chainId: parseInt(data.chainId),
-        decimals: parseInt(data.decimals),
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      symbol: "",
+      rpcUrl: "",
+      chainId: "",
+      blockExplorer: "",
+      decimals: "18",
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAdding(true);
+    try {
+      await addCustomChain({
+        name: formData.name,
+        symbol: formData.symbol.toUpperCase(),
+        rpcUrl: formData.rpcUrl,
+        chainId: parseInt(formData.chainId),
+        blockExplorer: formData.blockExplorer || undefined,
+        decimals: parseInt(formData.decimals),
         iconColor: "#6B7280",
-        isDefault: false,
       });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chains"] });
       toast({
         title: "Network Added",
         description: `${formData.name} has been added successfully.`,
       });
       setOpen(false);
-      setFormData({
-        name: "",
-        symbol: "",
-        rpcUrl: "",
-        chainId: "",
-        blockExplorer: "",
-        decimals: "18",
-      });
-    },
-    onError: () => {
+      resetForm();
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to add network. Please try again.",
         variant: "destructive",
       });
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    addChainMutation.mutate(formData);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   return (
@@ -261,8 +260,8 @@ function AddChainDialog() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={addChainMutation.isPending} data-testid="button-submit-chain">
-              {addChainMutation.isPending ? "Adding..." : "Add Network"}
+            <Button type="submit" disabled={isAdding} data-testid="button-submit-chain">
+              {isAdding ? "Adding..." : "Add Network"}
             </Button>
           </DialogFooter>
         </form>
@@ -599,7 +598,7 @@ function CustomTokenCard({ token, onRemove }: { token: CustomToken; onRemove: (i
 }
 
 export default function Chains() {
-  const { wallets, isUnlocked, chains, customTokens, addCustomToken, removeCustomToken } = useWallet();
+  const { wallets, isUnlocked, chains, customTokens, addCustomToken, removeCustomToken, addCustomChain, customChains } = useWallet();
   const hasWallet = wallets.length > 0;
   const [activeTab, setActiveTab] = useState("chains");
 
@@ -618,7 +617,7 @@ export default function Chains() {
         <h1 className="text-3xl font-bold">Chains & Tokens</h1>
         <div className="flex gap-2">
           <AddTokenDialog addCustomToken={addCustomToken} />
-          <AddChainDialog />
+          <AddChainDialog addCustomChain={addCustomChain} />
         </div>
       </div>
 
