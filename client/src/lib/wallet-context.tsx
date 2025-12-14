@@ -286,15 +286,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     }
     
-    // Lock wallet when switching modes (security measure)
-    hardwareWallet.lock();
-    
     // Switch mode and immediately clear wallets to prevent stale data during async load
     setWalletModeInternal(mode);
     localStorage.setItem("walletMode", mode);
     setWallets([]);
     
-    // Load wallets from storage for the target mode
+    // Load wallets from storage for the target mode - no PIN required for viewing
     try {
       if (mode === "soft_wallet") {
         const softSetup = await clientStorage.isSoftWalletSetup();
@@ -302,39 +299,36 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         
         if (softSetup) {
           const softWalletData = await clientStorage.getSoftWalletData();
-          const mappedWallets: Wallet[] = softWalletData.map(w => ({
-            id: w.id,
-            deviceId: "soft",
-            chainId: w.chainId,
-            address: w.address,
-            balance: "0",
-            isActive: true,
-            accountIndex: w.accountIndex ?? 0,
-            label: w.label,
-          }));
-          setSoftWallets(mappedWallets);
-          setWallets(mappedWallets);
+          if (softWalletData.length > 0) {
+            const mappedWallets: Wallet[] = softWalletData.map(w => ({
+              id: w.id,
+              deviceId: "soft",
+              chainId: w.chainId,
+              address: w.address,
+              balance: "0",
+              isActive: true,
+              accountIndex: w.accountIndex ?? 0,
+              label: w.label,
+            }));
+            setSoftWallets(mappedWallets);
+            setWallets(mappedWallets);
+          } else {
+            // No wallet data even though setup flag is true - just show empty state
+            setWallets([]);
+          }
         } else {
+          // Not set up - show empty state, user can set up from dashboard
           setWallets([]);
-          // Trigger setup flow for the new mode
-          setPinAction("setup");
-          setShowPinModal(true);
         }
       } else {
         const hardSetup = await clientStorage.isHardWalletSetup();
         const hasStoredHardWallet = await hardwareWallet.hasStoredHardWallet();
         
-        if (hardSetup && hasStoredHardWallet) {
+        if (hardSetup || hasStoredHardWallet) {
           const hardWalletData = await clientStorage.getHardWalletData();
-          const softWalletData = await clientStorage.getSoftWalletData();
           
-          // Check for cross-contamination: if hard wallet storage has same addresses as soft wallet
-          const softAddresses = new Set(softWalletData.map(w => w.address.toLowerCase()));
-          const hardAddressesMatchSoft = hardWalletData.length > 0 && 
-            hardWalletData.every(w => softAddresses.has(w.address.toLowerCase()));
-          
-          if (hardWalletData.length > 0 && !hardAddressesMatchSoft) {
-            // Reconnect the hardware wallet from storage
+          if (hardWalletData.length > 0) {
+            // Reconnect the hardware wallet from storage (but don't unlock - keep it locked)
             await hardwareWallet.reconnectFromStorage();
             
             const mappedWallets: Wallet[] = hardWalletData.map(w => ({
@@ -351,20 +345,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             setWallets(mappedWallets);
             setHasHardWalletSetup(true);
           } else {
-            // No data or corrupted data - clear and trigger re-setup
-            await clientStorage.clearHardWallet();
+            // No wallet data - show empty state
             setHasHardWalletSetup(false);
             setHardWallets([]);
             setWallets([]);
-            setPinAction("setup");
-            setShowPinModal(true);
           }
         } else {
+          // Not set up - show empty state, user can set up from dashboard
           setHasHardWalletSetup(false);
           setWallets([]);
-          // Trigger setup flow for the new mode
-          setPinAction("setup");
-          setShowPinModal(true);
         }
       }
     } catch (err) {
