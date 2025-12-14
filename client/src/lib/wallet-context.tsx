@@ -539,22 +539,34 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // Computed value for whether current mode has a wallet set up
   const currentModeHasWallet = walletMode === "soft_wallet" ? hasSoftWalletSetup : hasHardWalletSetup;
 
-  // Manage hard wallet display based on device connection status
+  // Manage wallet display based on mode and connection status
   useEffect(() => {
-    if (walletMode !== "hard_wallet") return;
-    
-    if (isConnected) {
-      // Device is connected - show hard wallets if we have cached data
-      if (wallets.length === 0 && hardWallets.length > 0) {
-        setWallets(hardWallets);
+    if (walletMode === "hard_wallet") {
+      if (isConnected) {
+        // Device is connected - show hard wallets if we have cached data
+        if (wallets.length === 0 && hardWallets.length > 0) {
+          setWallets(hardWallets);
+        }
+      } else {
+        // Device is NOT connected - clear the wallet display
+        if (wallets.length > 0) {
+          setWallets([]);
+        }
       }
     } else {
-      // Device is NOT connected - clear the wallet display
-      if (wallets.length > 0) {
-        setWallets([]);
+      // Soft wallet mode - ensure we only show soft wallet data
+      // If showing hard wallet data (deviceId === "hard"), clear it
+      const hasHardWalletData = wallets.some(w => w.deviceId === "hard");
+      if (hasHardWalletData) {
+        // Clear hard wallet data, only show soft wallet data
+        if (softWallets.length > 0) {
+          setWallets(softWallets);
+        } else {
+          setWallets([]);
+        }
       }
     }
-  }, [walletMode, isConnected, hardWallets]);
+  }, [walletMode, isConnected, hardWallets, softWallets]);
 
   const connectLedger = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
