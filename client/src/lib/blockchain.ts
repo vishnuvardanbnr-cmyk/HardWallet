@@ -300,3 +300,153 @@ export async function getUniversalBalance(address: string, chainId: number, chai
     return await getNonEvmBalance(address, chainSymbol);
   }
 }
+
+// Token contract addresses for popular tokens
+const TOKEN_CONTRACTS: Record<string, { address: string; chainId: number; decimals: number; rpcUrl: string }> = {
+  // USDT on different chains
+  'usdt-eth': { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', chainId: 1, decimals: 6, rpcUrl: 'https://eth.llamarpc.com' },
+  'usdt-bsc': { address: '0x55d398326f99059fF775485246999027B3197955', chainId: 56, decimals: 18, rpcUrl: 'https://bsc-dataseed.binance.org' },
+  'usdt-polygon': { address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', chainId: 137, decimals: 6, rpcUrl: 'https://polygon-rpc.com' },
+  'usdt-arb': { address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', chainId: 42161, decimals: 6, rpcUrl: 'https://arb1.arbitrum.io/rpc' },
+  // USDC on different chains
+  'usdc-eth': { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chainId: 1, decimals: 6, rpcUrl: 'https://eth.llamarpc.com' },
+  'usdc-bsc': { address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', chainId: 56, decimals: 18, rpcUrl: 'https://bsc-dataseed.binance.org' },
+  'usdc-polygon': { address: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', chainId: 137, decimals: 6, rpcUrl: 'https://polygon-rpc.com' },
+  'usdc-arb': { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', chainId: 42161, decimals: 6, rpcUrl: 'https://arb1.arbitrum.io/rpc' },
+  // Wrapped Bitcoin
+  'wbtc-eth': { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', chainId: 1, decimals: 8, rpcUrl: 'https://eth.llamarpc.com' },
+  // Chainlink
+  'link-eth': { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // Uniswap
+  'uni-eth': { address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // Shiba Inu
+  'shib-eth': { address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // Lido Staked Ether
+  'steth-eth': { address: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // Aave
+  'aave-eth': { address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // Maker
+  'mkr-eth': { address: '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // The Graph
+  'grt-eth': { address: '0xc944E90C64B2c07662A292be6244BDf05Cda44a7', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+  // DAI
+  'dai-eth': { address: '0x6B175474E89094C44Da98b954EesCD73FBD3855', chainId: 1, decimals: 18, rpcUrl: 'https://eth.llamarpc.com' },
+};
+
+// TRC-20 token addresses on TRON
+const TRON_TOKEN_CONTRACTS: Record<string, { address: string; decimals: number }> = {
+  'usdt-tron': { address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', decimals: 6 },
+  'usdc-tron': { address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', decimals: 6 },
+};
+
+// Fetch TRC-20 token balance from TRON
+async function getTrc20TokenBalance(walletAddress: string, tokenAddress: string, decimals: number): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://api.trongrid.io/v1/accounts/${walletAddress}/tokens?only_trc20=true`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!response.ok) return "0";
+    const data = await response.json();
+    
+    if (data.data?.[0]?.trc20) {
+      const tokens = data.data[0].trc20;
+      for (const token of tokens) {
+        const contractAddr = Object.keys(token)[0];
+        if (contractAddr === tokenAddress) {
+          const rawBalance = token[contractAddr];
+          const balance = parseFloat(rawBalance) / Math.pow(10, decimals);
+          return balance.toString();
+        }
+      }
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
+
+// Fetch ERC-20/BEP-20 token balance
+async function getEvmTokenBalance(walletAddress: string, contractAddress: string, chainId: number, decimals: number, rpcUrl: string): Promise<string> {
+  try {
+    const provider = new ethers.JsonRpcProvider(rpcUrl, chainId);
+    const contract = new ethers.Contract(contractAddress, ERC20_ABI, provider);
+    const balance = await contract.balanceOf(walletAddress);
+    return ethers.formatUnits(balance, decimals);
+  } catch {
+    return "0";
+  }
+}
+
+// CoinGecko ID to token key mapping
+const COINGECKO_TO_TOKEN_KEY: Record<string, { evmKey?: string; tronKey?: string; parentChainSymbol: string }> = {
+  'tether': { evmKey: 'usdt-eth', tronKey: 'usdt-tron', parentChainSymbol: 'ETH' },
+  'usd-coin': { evmKey: 'usdc-eth', tronKey: 'usdc-tron', parentChainSymbol: 'ETH' },
+  'wrapped-bitcoin': { evmKey: 'wbtc-eth', parentChainSymbol: 'ETH' },
+  'chainlink': { evmKey: 'link-eth', parentChainSymbol: 'ETH' },
+  'uniswap': { evmKey: 'uni-eth', parentChainSymbol: 'ETH' },
+  'shiba-inu': { evmKey: 'shib-eth', parentChainSymbol: 'ETH' },
+  'staked-ether': { evmKey: 'steth-eth', parentChainSymbol: 'ETH' },
+  'aave': { evmKey: 'aave-eth', parentChainSymbol: 'ETH' },
+  'maker': { evmKey: 'mkr-eth', parentChainSymbol: 'ETH' },
+  'the-graph': { evmKey: 'grt-eth', parentChainSymbol: 'ETH' },
+  'dai': { evmKey: 'dai-eth', parentChainSymbol: 'ETH' },
+};
+
+// Get token balance for a specific CoinGecko asset
+export async function getTokenBalanceForAsset(
+  coingeckoId: string,
+  walletAddresses: Record<string, string> // chainSymbol -> address mapping
+): Promise<string> {
+  const tokenInfo = COINGECKO_TO_TOKEN_KEY[coingeckoId];
+  if (!tokenInfo) {
+    return "0";
+  }
+
+  // Try EVM chains first
+  if (tokenInfo.evmKey && TOKEN_CONTRACTS[tokenInfo.evmKey]) {
+    const contract = TOKEN_CONTRACTS[tokenInfo.evmKey];
+    const walletAddress = walletAddresses[tokenInfo.parentChainSymbol];
+    if (walletAddress) {
+      const balance = await getEvmTokenBalance(
+        walletAddress,
+        contract.address,
+        contract.chainId,
+        contract.decimals,
+        contract.rpcUrl
+      );
+      if (parseFloat(balance) > 0) {
+        return balance;
+      }
+    }
+  }
+
+  // Try TRON if available
+  if (tokenInfo.tronKey && TRON_TOKEN_CONTRACTS[tokenInfo.tronKey]) {
+    const contract = TRON_TOKEN_CONTRACTS[tokenInfo.tronKey];
+    const walletAddress = walletAddresses['TRX'];
+    if (walletAddress) {
+      const balance = await getTrc20TokenBalance(
+        walletAddress,
+        contract.address,
+        contract.decimals
+      );
+      if (parseFloat(balance) > 0) {
+        return balance;
+      }
+    }
+  }
+
+  return "0";
+}
+
+// Check if an asset is a token (vs native coin)
+export function isTokenAsset(coingeckoId: string): boolean {
+  return coingeckoId in COINGECKO_TO_TOKEN_KEY;
+}
+
+// Get the parent chain symbol for a token asset
+export function getTokenParentChain(coingeckoId: string): string | null {
+  const tokenInfo = COINGECKO_TO_TOKEN_KEY[coingeckoId];
+  return tokenInfo?.parentChainSymbol || null;
+}
