@@ -106,6 +106,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   
   // Ref to track mode switch operations and prevent race conditions
   const modeSwitchIdRef = useRef<number>(0);
+  // Flag to indicate a mode switch is in progress
+  const isModeSwitchingRef = useRef<boolean>(false);
 
   // Compute available accounts from wallets (unique account indices with labels)
   const availableAccounts = useMemo(() => {
@@ -249,6 +251,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const setWalletMode = useCallback(async (mode: "hard_wallet" | "soft_wallet") => {
     if (mode === walletMode) return;
     
+    // Mark that we're switching modes to prevent effects from interfering
+    isModeSwitchingRef.current = true;
+    
     // Increment mode switch ID to track this operation and prevent race conditions
     modeSwitchIdRef.current += 1;
     const currentSwitchId = modeSwitchIdRef.current;
@@ -377,6 +382,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       console.error("Failed to load wallet data for mode:", mode, err);
       if (modeSwitchIdRef.current === currentSwitchId) {
         setWallets([]);
+      }
+    } finally {
+      // Only clear the switching flag if this is still the current operation
+      if (modeSwitchIdRef.current === currentSwitchId) {
+        isModeSwitchingRef.current = false;
       }
     }
   }, [walletMode, wallets, storageInitialized, chains]);
@@ -564,6 +574,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   // Manage wallet display based on mode and connection status
   useEffect(() => {
+    // Skip this effect if a mode switch is in progress to prevent race conditions
+    if (isModeSwitchingRef.current) return;
+    
     if (walletMode === "hard_wallet") {
       if (isConnected) {
         // Device is connected - show hard wallets if we have cached data
