@@ -287,6 +287,16 @@ export const DEFAULT_CHAINS: Omit<Chain, "id">[] = [
     isDefault: true,
     decimals: 6,
   },
+  {
+    name: "Polkadot",
+    symbol: "DOT",
+    rpcUrl: "https://rpc.polkadot.io",
+    chainId: -13,
+    blockExplorer: "https://polkadot.subscan.io",
+    iconColor: "#E6007A",
+    isDefault: true,
+    decimals: 10,
+  },
 ];
 
 // Default USDT token configurations for multiple chains

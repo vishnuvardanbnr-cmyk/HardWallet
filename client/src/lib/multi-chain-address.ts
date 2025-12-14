@@ -21,6 +21,7 @@ const COIN_TYPES: Record<string, number> = {
   ADA: 1815,
   ATOM: 118,
   OSMO: 118,
+  DOT: 354,
 };
 
 // Generate BIP44 derivation path with account index
@@ -39,6 +40,9 @@ function getDerivationPath(chainSymbol: string, accountIndex: number = 0): strin
     case 'ADA':
       // Cardano uses CIP-1852 with all hardened for SLIP-0010
       return `m/1852'/${coinType}'/${accountIndex}'/0'/0'`;
+    case 'DOT':
+      // Polkadot uses all hardened path for SLIP-0010 ed25519
+      return `m/44'/${coinType}'/${accountIndex}'/0'/0'`;
     default:
       // Standard BIP44 for EVM and most other chains
       return `m/44'/${coinType}'/${accountIndex}'/0/0`;
@@ -62,6 +66,7 @@ const DERIVATION_PATHS: Record<string, string> = {
   ADA: "m/1852'/1815'/0'/0'/0'", // Cardano (SLIP-0010 ed25519 - all hardened)
   ATOM: "m/44'/118'/0'/0/0",   // Cosmos (secp256k1)
   OSMO: "m/44'/118'/0'/0/0",   // Osmosis (same as Cosmos)
+  DOT: "m/44'/354'/0'/0'/0'",  // Polkadot (SLIP-0010 ed25519 - all hardened)
 };
 
 // Base58 alphabets
@@ -392,6 +397,93 @@ function blake2b224(data: Uint8Array): Uint8Array {
   return blake2b(data, undefined, 28);
 }
 
+// SS58 encoding for Polkadot addresses
+function ss58Encode(publicKey: Uint8Array, prefix: number = 0): string {
+  // SS58 uses Base58 with a specific checksum using Blake2b-512
+  const SS58_PREFIX = new TextEncoder().encode('SS58PRE');
+  
+  // Build the data to hash: SS58PRE || prefix || publicKey
+  let prefixBytes: Uint8Array;
+  if (prefix < 64) {
+    prefixBytes = new Uint8Array([prefix]);
+  } else if (prefix < 16384) {
+    // Two-byte encoding for prefix >= 64
+    prefixBytes = new Uint8Array([
+      ((prefix & 0xFC) >> 2) | 0x40,
+      (prefix >> 8) | ((prefix & 0x03) << 6)
+    ]);
+  } else {
+    throw new Error('SS58 prefix too large');
+  }
+  
+  // Concatenate for checksum calculation
+  const checksumInput = new Uint8Array(SS58_PREFIX.length + prefixBytes.length + publicKey.length);
+  checksumInput.set(SS58_PREFIX, 0);
+  checksumInput.set(prefixBytes, SS58_PREFIX.length);
+  checksumInput.set(publicKey, SS58_PREFIX.length + prefixBytes.length);
+  
+  // Blake2b-512 hash, take first 2 bytes as checksum
+  const hash = blake2b(checksumInput, undefined, 64);
+  const checksum = hash.slice(0, 2);
+  
+  // Build final address bytes: prefix || publicKey || checksum
+  const addressBytes = new Uint8Array(prefixBytes.length + publicKey.length + 2);
+  addressBytes.set(prefixBytes, 0);
+  addressBytes.set(publicKey, prefixBytes.length);
+  addressBytes.set(checksum, prefixBytes.length + publicKey.length);
+  
+  return base58Encode(addressBytes);
+}
+
+async function derivePolkadotAddress(mnemonic: string, accountIndex: number = 0): Promise<string> {
+  try {
+    const mnemonicObj = ethers.Mnemonic.fromPhrase(mnemonic);
+    const seed = mnemonicObj.computeSeed();
+    const seedBytes = ethers.getBytes(seed);
+    
+    // SLIP-0010 ed25519 key derivation (same pattern as Solana/Cardano)
+    const masterKey = await hmacSha512(
+      new TextEncoder().encode('ed25519 seed'),
+      seedBytes
+    );
+    
+    let key = masterKey.slice(0, 32);
+    let chainCode = masterKey.slice(32, 64);
+    
+    // Path: m/44'/354'/accountIndex'/0'/0' (all hardened for SLIP-0010 ed25519)
+    const indices = [
+      0x8000002C, // 44' (purpose)
+      0x80000162, // 354' (Polkadot coin type)
+      0x80000000 + accountIndex, // accountIndex' (account)
+      0x80000000, // 0' (change - hardened)
+      0x80000000, // 0' (address index - hardened)
+    ];
+    
+    for (const index of indices) {
+      const data = new Uint8Array(37);
+      data[0] = 0x00;
+      data.set(key, 1);
+      data[33] = (index >> 24) & 0xff;
+      data[34] = (index >> 16) & 0xff;
+      data[35] = (index >> 8) & 0xff;
+      data[36] = index & 0xff;
+      
+      const derived = await hmacSha512(chainCode, data);
+      key = derived.slice(0, 32);
+      chainCode = derived.slice(32, 64);
+    }
+    
+    // Generate keypair from derived seed
+    const keypair = nacl.sign.keyPair.fromSeed(key);
+    
+    // SS58 encode with prefix 0 for Polkadot mainnet
+    return ss58Encode(keypair.publicKey, 0);
+  } catch (error) {
+    console.error('Polkadot derivation error:', error);
+    return '';
+  }
+}
+
 async function deriveCardanoAddress(mnemonic: string, accountIndex: number = 0): Promise<string> {
   try {
     const mnemonicObj = ethers.Mnemonic.fromPhrase(mnemonic);
@@ -579,6 +671,10 @@ export async function deriveAddressForChain(mnemonic: string, chainSymbol: strin
         
       case 'ADA':
         address = await deriveCardanoAddress(mnemonic, accountIndex);
+        break;
+        
+      case 'DOT':
+        address = await derivePolkadotAddress(mnemonic, accountIndex);
         break;
         
       case 'ATOM':
