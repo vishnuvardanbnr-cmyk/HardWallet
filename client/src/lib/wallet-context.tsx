@@ -163,9 +163,47 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const savedMode = localStorage.getItem("walletMode");
         const currentMode = savedMode === "hard_wallet" ? "hard_wallet" : "soft_wallet";
         
-        // Load soft wallet data if it's set up
-        if (softSetup) {
-          const softWalletData = await clientStorage.getSoftWalletData();
+        // Load wallet data and check for cross-contamination
+        const softWalletData = softSetup ? await clientStorage.getSoftWalletData() : [];
+        const hardWalletData = hardSetup ? await clientStorage.getHardWalletData() : [];
+        
+        // Detect cross-contamination: if addresses match between soft and hard, clear the contaminated one
+        if (softWalletData.length > 0 && hardWalletData.length > 0) {
+          const softAddresses = new Set(softWalletData.map(w => w.address.toLowerCase()));
+          const hardAddresses = new Set(hardWalletData.map(w => w.address.toLowerCase()));
+          const overlap = [...softAddresses].some(addr => hardAddresses.has(addr));
+          
+          if (overlap) {
+            console.log("[WalletContext] Detected cross-contamination - clearing soft wallet data");
+            await clientStorage.clearSoftWallet();
+            await clientStorage.clearEncryptedSeed();
+            setHasSoftWalletSetup(false);
+            setSoftWallets([]);
+            
+            // Only load hard wallet data
+            if (hardSetup) {
+              const mappedHardWallets: Wallet[] = hardWalletData.map(w => ({
+                id: w.id,
+                deviceId: "hard",
+                chainId: w.chainId,
+                address: w.address,
+                balance: "0",
+                isActive: true,
+                accountIndex: w.accountIndex ?? 0,
+                label: w.label,
+              }));
+              setHardWallets(mappedHardWallets);
+              if (currentMode === "hard_wallet") {
+                await hardwareWallet.reconnectFromStorage();
+                setWallets(mappedHardWallets);
+              }
+            }
+            return;
+          }
+        }
+        
+        // Load soft wallet data if it's set up (no contamination)
+        if (softSetup && softWalletData.length > 0) {
           const mappedWallets: Wallet[] = softWalletData.map(w => ({
             id: w.id,
             deviceId: "soft",
@@ -184,8 +222,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
         
         // Load hard wallet data if it's set up
-        if (hardSetup) {
-          const hardWalletData = await clientStorage.getHardWalletData();
+        if (hardSetup && hardWalletData.length > 0) {
           const mappedWallets: Wallet[] = hardWalletData.map(w => ({
             id: w.id,
             deviceId: "hard",
@@ -199,6 +236,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           setHardWallets(mappedWallets);
           // Set as active wallets if in hard wallet mode
           if (currentMode === "hard_wallet") {
+            await hardwareWallet.reconnectFromStorage();
             setWallets(mappedWallets);
           }
         }
