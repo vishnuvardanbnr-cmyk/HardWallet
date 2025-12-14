@@ -57,6 +57,10 @@ Preferred communication style: Simple, everyday language.
 - Security-focused aesthetic with professional, clean visuals
 
 ## Recent Changes
+- **Hard Wallet Navigation Fix** (Dec 2024): Fixed "Wallet Not Found" error and missing price/holdings when in hard wallet mode:
+  - Updated wallet-detail page to use mode-aware wallet list instead of generic wallets array
+  - Added sync effect to populate wallets array when hard wallet connects
+  - USD balance calculations now work correctly after device connection
 - **Custom Chain/Network Support** (Dec 2024): Added ability to add custom EVM blockchain networks:
   - Add custom networks with name, symbol, chain ID, RPC URL, and block explorer
   - Custom chains merge with default chains and appear in the Networks tab
