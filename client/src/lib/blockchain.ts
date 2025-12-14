@@ -232,6 +232,255 @@ async function getTronBalance(address: string): Promise<string> {
   }
 }
 
+async function getSolanaBalance(address: string): Promise<string> {
+  try {
+    const response = await fetch('https://api.mainnet-beta.solana.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBalance',
+        params: [address]
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) return "0";
+    const data = await response.json();
+    if (data.result?.value !== undefined) {
+      const sol = data.result.value / 1000000000; // 9 decimals
+      return sol.toString();
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
+
+async function getPolkadotBalance(address: string): Promise<string> {
+  // Try Subscan open API first (most reliable free option)
+  try {
+    const response = await fetch(
+      `https://polkadot.webapi.subscan.io/api/v2/scan/account`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+        signal: AbortSignal.timeout(10000)
+      }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      // Subscan returns balance as a string in DOT
+      if (data.data?.account?.balance) {
+        return data.data.account.balance;
+      }
+      // Alternative field location
+      if (data.data?.balance) {
+        return data.data.balance;
+      }
+    }
+  } catch {
+    // Continue to fallback
+  }
+  
+  // Fallback: Statescan API
+  try {
+    const response = await fetch(
+      `https://polkadot.statescan.io/api/accounts/${address}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      // Statescan returns accountDetail.data.free in planck
+      if (data.accountDetail?.data?.free) {
+        const free = BigInt(data.accountDetail.data.free);
+        const dot = Number(free) / Math.pow(10, 10);
+        return dot.toString();
+      }
+      // Alternative: direct data.free
+      if (data.data?.free) {
+        const free = BigInt(data.data.free);
+        const dot = Number(free) / Math.pow(10, 10);
+        return dot.toString();
+      }
+    }
+  } catch {
+    // Continue to next fallback
+  }
+  
+  // Final fallback: Polkaholic API
+  try {
+    const response = await fetch(
+      `https://api.polkaholic.io/account/${address}?chainID=polkadot`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      // Polkaholic returns balances.free in planck
+      if (data.balances?.free) {
+        const free = BigInt(data.balances.free);
+        const dot = Number(free) / Math.pow(10, 10);
+        return dot.toString();
+      }
+      // Alternative field
+      if (data.free) {
+        const free = BigInt(data.free);
+        const dot = Number(free) / Math.pow(10, 10);
+        return dot.toString();
+      }
+    }
+  } catch {
+    // All attempts failed
+  }
+  
+  return "0";
+}
+
+async function getXrpBalance(address: string): Promise<string> {
+  try {
+    const response = await fetch('https://s1.ripple.com:51234/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        method: 'account_info',
+        params: [{
+          account: address,
+          ledger_index: 'validated'
+        }]
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) return "0";
+    const data = await response.json();
+    if (data.result?.account_data?.Balance) {
+      const drops = parseInt(data.result.account_data.Balance);
+      const xrp = drops / 1000000; // 6 decimals
+      return xrp.toString();
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
+
+async function getDogeBalance(address: string): Promise<string> {
+  try {
+    // Using Blockcypher API for Dogecoin
+    const response = await fetch(
+      `https://api.blockcypher.com/v1/doge/main/addrs/${address}/balance`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!response.ok) return "0";
+    const data = await response.json();
+    if (data.balance !== undefined) {
+      const doge = data.balance / 100000000; // 8 decimals
+      return doge.toString();
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
+
+async function getLitecoinBalance(address: string): Promise<string> {
+  try {
+    // Using Blockcypher API for Litecoin
+    const response = await fetch(
+      `https://api.blockcypher.com/v1/ltc/main/addrs/${address}/balance`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!response.ok) return "0";
+    const data = await response.json();
+    if (data.balance !== undefined) {
+      const ltc = data.balance / 100000000; // 8 decimals
+      return ltc.toString();
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
+
+async function getBitcoinCashBalance(address: string): Promise<string> {
+  try {
+    // Using Bitcoin.com API for BCH
+    const response = await fetch(
+      `https://rest.bitcoin.com/v2/address/details/${address}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!response.ok) {
+      // Fallback to Blockchair API
+      const blockchairResponse = await fetch(
+        `https://api.blockchair.com/bitcoin-cash/dashboards/address/${address}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!blockchairResponse.ok) return "0";
+      const blockchairData = await blockchairResponse.json();
+      if (blockchairData.data?.[address]?.address?.balance) {
+        const bch = blockchairData.data[address].address.balance / 100000000;
+        return bch.toString();
+      }
+      return "0";
+    }
+    const data = await response.json();
+    if (data.balance !== undefined) {
+      return data.balance.toString();
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
+
+async function getCardanoBalance(address: string): Promise<string> {
+  try {
+    // Using Koios API for Cardano (free, no API key required)
+    const response = await fetch('https://api.koios.rest/api/v1/address_info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ _addresses: [address] }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) return "0";
+    const data = await response.json();
+    // Koios returns balance as a string in lovelace
+    if (data[0]?.utxo_set) {
+      // Sum up all UTXOs for total balance
+      let totalLovelace = 0;
+      for (const utxo of data[0].utxo_set) {
+        totalLovelace += parseInt(utxo.value || "0");
+      }
+      const ada = totalLovelace / 1000000;
+      return ada.toString();
+    }
+    return "0";
+  } catch {
+    // Fallback: Blockfrost public explorer
+    try {
+      const response = await fetch(
+        `https://cardano-mainnet.blockfrost.io/api/v0/addresses/${address}`,
+        { 
+          headers: { 'project_id': 'mainnetpublic' },
+          signal: AbortSignal.timeout(10000) 
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // Find ADA (lovelace) amount
+        const lovelaceAsset = data.amount?.find((a: any) => a.unit === 'lovelace');
+        if (lovelaceAsset) {
+          const ada = parseInt(lovelaceAsset.quantity) / 1000000;
+          return ada.toString();
+        }
+      }
+    } catch {
+      // All attempts failed
+    }
+    return "0";
+  }
+}
+
 async function getCosmosBalance(address: string): Promise<string> {
   try {
     const response = await fetch(
@@ -281,13 +530,19 @@ export async function getNonEvmBalance(address: string, chainSymbol: string): Pr
     case 'OSMO':
       return await getOsmosisBalance(address);
     case 'SOL':
+      return await getSolanaBalance(address);
     case 'XRP':
+      return await getXrpBalance(address);
     case 'DOGE':
+      return await getDogeBalance(address);
     case 'ADA':
+      return await getCardanoBalance(address);
     case 'DOT':
+      return await getPolkadotBalance(address);
     case 'LTC':
+      return await getLitecoinBalance(address);
     case 'BCH':
-      return "0";
+      return await getBitcoinCashBalance(address);
     default:
       return "0";
   }
