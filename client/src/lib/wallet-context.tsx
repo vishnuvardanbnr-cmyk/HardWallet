@@ -120,10 +120,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return Array.from(accountMap.values()).sort((a, b) => a.index - b.index);
   }, [wallets]);
 
-  // Filter wallets by selected account index
+  // Filter wallets by selected account index - uses modeBasedWallets for race-condition-free display
   const visibleWallets = useMemo(() => {
-    return wallets.filter(w => w.accountIndex === selectedAccountIndex);
-  }, [wallets, selectedAccountIndex]);
+    // Use modeBasedWallets which is computed synchronously from current mode
+    // This prevents hard wallet data from appearing in soft wallet mode during rapid switches
+    const walletsToFilter = walletMode === "soft_wallet" ? softWallets : 
+      (hardwareState.status === "connected" || hardwareState.status === "unlocked" ? hardWallets : []);
+    return walletsToFilter.filter(w => w.accountIndex === selectedAccountIndex);
+  }, [walletMode, softWallets, hardWallets, hardwareState.status, selectedAccountIndex]);
 
   // Normalize selectedAccountIndex when wallets change and current index becomes invalid
   useEffect(() => {
@@ -572,37 +576,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // Computed value for whether current mode has a wallet set up
   const currentModeHasWallet = walletMode === "soft_wallet" ? hasSoftWalletSetup : hasHardWalletSetup;
 
-  // Manage wallet display based on mode and connection status
-  useEffect(() => {
-    // Skip this effect if a mode switch is in progress to prevent race conditions
-    if (isModeSwitchingRef.current) return;
-    
-    if (walletMode === "hard_wallet") {
-      if (isConnected) {
-        // Device is connected - show hard wallets if we have cached data
-        if (wallets.length === 0 && hardWallets.length > 0) {
-          setWallets(hardWallets);
-        }
-      } else {
-        // Device is NOT connected - clear the wallet display
-        if (wallets.length > 0) {
-          setWallets([]);
-        }
-      }
+  // CRITICAL: Compute displayed wallets synchronously based on current mode
+  // This eliminates race conditions from async state updates
+  const modeBasedWallets = useMemo(() => {
+    if (walletMode === "soft_wallet") {
+      // In soft wallet mode, ONLY show soft wallet data
+      return softWallets;
     } else {
-      // Soft wallet mode - ensure we only show soft wallet data
-      // If showing hard wallet data (deviceId === "hard"), clear it
-      const hasHardWalletData = wallets.some(w => w.deviceId === "hard");
-      if (hasHardWalletData) {
-        // Clear hard wallet data, only show soft wallet data
-        if (softWallets.length > 0) {
-          setWallets(softWallets);
-        } else {
-          setWallets([]);
-        }
-      }
+      // In hard wallet mode, ONLY show hard wallet data when device is connected
+      const hardConnected = hardwareState.status === "connected" || hardwareState.status === "unlocked";
+      return hardConnected ? hardWallets : [];
     }
-  }, [walletMode, isConnected, hardWallets, softWallets]);
+  }, [walletMode, softWallets, hardWallets, hardwareState.status]);
 
   const connectLedger = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
