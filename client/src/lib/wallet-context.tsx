@@ -103,6 +103,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [selectedAccountIndex, setSelectedAccountIndex] = useState<number>(0);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [customChains, setCustomChains] = useState<CustomChain[]>([]);
+  
+  // Ref to track mode switch operations and prevent race conditions
+  const modeSwitchIdRef = useRef<number>(0);
 
   // Compute available accounts from wallets (unique account indices with labels)
   const availableAccounts = useMemo(() => {
@@ -246,6 +249,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const setWalletMode = useCallback(async (mode: "hard_wallet" | "soft_wallet") => {
     if (mode === walletMode) return;
     
+    // Increment mode switch ID to track this operation and prevent race conditions
+    modeSwitchIdRef.current += 1;
+    const currentSwitchId = modeSwitchIdRef.current;
+    
     // First, persist current mode's wallets to storage before switching
     // Only save if wallets match the current mode (prevent cross-contamination)
     const expectedDeviceId = walletMode === "soft_wallet" ? "soft" : "hard";
@@ -271,15 +278,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (walletMode === "soft_wallet") {
         await clientStorage.saveSoftWalletData(storedWalletsForCurrentMode);
         await clientStorage.setSoftWalletSetup(true);
+        // Check if this operation is still current before mutating state
+        if (modeSwitchIdRef.current !== currentSwitchId) return;
         setHasSoftWalletSetup(true);
         setSoftWallets(walletsForCurrentMode);
       } else {
         await clientStorage.saveHardWalletData(storedWalletsForCurrentMode);
         await clientStorage.setHardWalletSetup(true);
+        if (modeSwitchIdRef.current !== currentSwitchId) return;
         setHasHardWalletSetup(true);
         setHardWallets(walletsForCurrentMode);
       }
     }
+    
+    // Check if this operation is still current
+    if (modeSwitchIdRef.current !== currentSwitchId) return;
     
     // Switch mode and immediately clear wallets to prevent stale data during async load
     setWalletModeInternal(mode);
@@ -290,10 +303,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     try {
       if (mode === "soft_wallet") {
         const softSetup = await clientStorage.isSoftWalletSetup();
+        // Check if this operation is still current before mutating state
+        if (modeSwitchIdRef.current !== currentSwitchId) return;
         setHasSoftWalletSetup(softSetup);
         
         if (softSetup) {
           const softWalletData = await clientStorage.getSoftWalletData();
+          if (modeSwitchIdRef.current !== currentSwitchId) return;
+          
           if (softWalletData.length > 0) {
             const mappedWallets: Wallet[] = softWalletData.map(w => ({
               id: w.id,
@@ -321,8 +338,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const hardSetup = await clientStorage.isHardWalletSetup();
         const hasStoredHardWallet = await hardwareWallet.hasStoredHardWallet();
         
+        // Check if this operation is still current before mutating state
+        if (modeSwitchIdRef.current !== currentSwitchId) return;
+        
         if (hardSetup || hasStoredHardWallet) {
           const hardWalletData = await clientStorage.getHardWalletData();
+          if (modeSwitchIdRef.current !== currentSwitchId) return;
           
           if (hardWalletData.length > 0) {
             const mappedWallets: Wallet[] = hardWalletData.map(w => ({
@@ -354,7 +375,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error("Failed to load wallet data for mode:", mode, err);
-      setWallets([]);
+      if (modeSwitchIdRef.current === currentSwitchId) {
+        setWallets([]);
+      }
     }
   }, [walletMode, wallets, storageInitialized, chains]);
 
