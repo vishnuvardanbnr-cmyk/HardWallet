@@ -14,7 +14,6 @@ import { PinModal } from "@/components/pin-modal";
 import Dashboard from "@/pages/dashboard";
 import Transfer from "@/pages/transfer";
 import Chains from "@/pages/chains";
-import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import SetupGuide from "@/pages/setup-guide";
 import WalletDetail from "@/pages/wallet-detail";
@@ -30,7 +29,6 @@ function Router() {
       <Route path="/wallet/:chainId" component={WalletDetail} />
       <Route path="/transfer" component={Transfer} />
       <Route path="/chains" component={Chains} />
-      <Route path="/history" component={History} />
       <Route path="/settings" component={Settings} />
       <Route path="/setup" component={SetupGuide} />
       <Route path="/manage-crypto" component={ManageCrypto} />

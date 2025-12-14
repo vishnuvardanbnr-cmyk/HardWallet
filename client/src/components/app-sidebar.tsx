@@ -3,7 +3,6 @@ import {
   LayoutDashboard, 
   ArrowLeftRight, 
   Layers, 
-  History, 
   Settings, 
   Shield,
   Lock,
@@ -55,11 +54,6 @@ const menuItems = [
     title: "DApps",
     url: "/dapps",
     icon: Link2,
-  },
-  {
-    title: "Transactions",
-    url: "/history",
-    icon: History,
   },
   {
     title: "Settings",
