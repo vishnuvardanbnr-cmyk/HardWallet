@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   ArrowUpRight, 
   ArrowDownLeft, 
@@ -543,6 +543,7 @@ export default function Dashboard() {
   const [seedConfirmed, setSeedConfirmed] = useState(false);
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({});
   const [customTokenBalances, setCustomTokenBalances] = useState<Record<string, string>>({});
+  const [selectedChainForList, setSelectedChainForList] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPrices().then(setPrices);
@@ -712,6 +713,27 @@ export default function Dashboard() {
   const totalUSDValue = nativeUSDValue + tokenUSDValue;
 
   const hasWallets = displayWallets.length > 0;
+
+  // Get unique chains from enabled assets for TokenPocket-style layout
+  const enabledChains = useMemo(() => {
+    const chainSet = new Set<string>();
+    sortedEnabledAssets.forEach(asset => {
+      const chainSymbol = COINGECKO_ID_TO_CHAIN_SYMBOL[asset.id];
+      if (chainSymbol) {
+        chainSet.add(chainSymbol);
+      }
+    });
+    return Array.from(chainSet);
+  }, [sortedEnabledAssets]);
+
+  // Get assets for selected chain
+  const assetsForSelectedChain = useMemo(() => {
+    if (!selectedChainForList) return sortedEnabledAssets;
+    return sortedEnabledAssets.filter(asset => {
+      const chainSymbol = COINGECKO_ID_TO_CHAIN_SYMBOL[asset.id];
+      return chainSymbol === selectedChainForList;
+    });
+  }, [sortedEnabledAssets, selectedChainForList]);
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -765,131 +787,144 @@ export default function Dashboard() {
   // TokenPocket-style layout for Soft Wallet
   if (walletMode === "soft_wallet") {
     return (
-      <div className="min-h-screen bg-background">
-        {/* Gradient Hero Section */}
-        <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-white">
-          <div className="p-4 md:p-6">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                {availableAccounts.length > 1 ? (
-                  <Select
-                    value={selectedAccountIndex.toString()}
-                    onValueChange={(val) => setSelectedAccountIndex(parseInt(val, 10))}
-                  >
-                    <SelectTrigger className="w-40 bg-white/20 border-white/30 text-white" data-testid="select-account">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableAccounts.map(acc => (
-                        <SelectItem key={acc.index} value={acc.index.toString()} data-testid={`select-account-option-${acc.index}`}>
-                          {acc.label || `Account ${acc.index + 1}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <h1 className="text-lg font-semibold">Soft Wallet</h1>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <WalletModeSelector />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-white hover:bg-white/20"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing || balanceCacheStatus.isRefreshing}
-                  data-testid="button-refresh-portfolio"
+      <div className="min-h-screen bg-slate-900 text-white">
+        {/* Dark Header with Balance */}
+        <div className="bg-slate-800 rounded-xl mx-4 mt-4 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {availableAccounts.length > 1 ? (
+                <Select
+                  value={selectedAccountIndex.toString()}
+                  onValueChange={(val) => setSelectedAccountIndex(parseInt(val, 10))}
                 >
-                  <RefreshCw className={`h-4 w-4 ${isRefreshing || balanceCacheStatus.isRefreshing ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-            </div>
-
-            {/* Portfolio Value */}
-            <div className="text-center py-6">
-              <p className="text-white/70 text-sm mb-2">Total Balance</p>
-              <h2 className="text-4xl md:text-5xl font-bold mb-2" data-testid="text-portfolio-value">
-                {formatUSD(totalUSDValue)}
-              </h2>
-              {balanceCacheStatus.isStale && balanceCacheStatus.lastUpdated && (
-                <p className="text-white/60 text-xs">
-                  Updated {clientStorage.getCacheAge(balanceCacheStatus.lastUpdated)}
-                </p>
+                  <SelectTrigger className="w-32 bg-slate-700 border-slate-600 text-white text-sm" data-testid="select-account">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableAccounts.map(acc => (
+                      <SelectItem key={acc.index} value={acc.index.toString()} data-testid={`select-account-option-${acc.index}`}>
+                        {acc.label || `Account ${acc.index + 1}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-slate-400 text-sm font-mono">Wallet</span>
               )}
-              {balanceCacheStatus.isRefreshing && (
-                <p className="text-white/60 text-xs animate-pulse">Refreshing...</p>
-              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-slate-400 hover:text-white"
+                onClick={handleRefresh}
+                disabled={isRefreshing || balanceCacheStatus.isRefreshing}
+                data-testid="button-refresh-portfolio"
+              >
+                <RefreshCw className={`h-3 w-3 ${isRefreshing || balanceCacheStatus.isRefreshing ? "animate-spin" : ""}`} />
+              </Button>
             </div>
+            <WalletModeSelector />
+          </div>
+          
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-3xl font-bold" data-testid="text-portfolio-value">
+              {formatUSD(totalUSDValue)}
+            </h2>
+            {balanceCacheStatus.isRefreshing && (
+              <span className="text-xs text-slate-400 animate-pulse">...</span>
+            )}
+          </div>
 
-            {/* Quick Action Buttons */}
-            <div className="flex justify-center gap-8 pb-6">
-              <Link href="/transfer?type=receive">
-                <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                    <ArrowDownLeft className="h-5 w-5" />
-                  </div>
-                  <span className="text-sm">Receive</span>
-                </button>
-              </Link>
-              <Link href="/transfer?type=send">
-                <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                    <ArrowUpRight className="h-5 w-5" />
-                  </div>
-                  <span className="text-sm">Send</span>
-                </button>
-              </Link>
-            </div>
+          {/* Send/Receive Buttons */}
+          <div className="flex gap-3">
+            <Link href="/transfer?type=send" className="flex-1">
+              <Button variant="outline" className="w-full bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+                <ArrowUpRight className="h-4 w-4 mr-2" />
+                Send
+              </Button>
+            </Link>
+            <Link href="/transfer?type=receive" className="flex-1">
+              <Button variant="outline" className="w-full bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+                <ArrowDownLeft className="h-4 w-4 mr-2" />
+                Receive
+              </Button>
+            </Link>
           </div>
         </div>
 
-        {/* Token List Section */}
-        <div className="p-4 md:p-6">
-          {/* Search and Controls */}
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tokens..."
-                value={assetSearch}
-                onChange={(e) => setAssetSearch(e.target.value)}
-                className="pl-9"
-                data-testid="input-search-assets"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Dialog open={showCreateWalletDialog} onOpenChange={setShowCreateWalletDialog}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" data-testid="button-create-wallet">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Wallet</DialogTitle>
-                    <DialogDescription>
-                      Create an additional wallet for your portfolio.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="py-4 space-y-4">
-                    <div>
-                      <Label htmlFor="wallet-label">Wallet Label (optional)</Label>
-                      <Input
-                        id="wallet-label"
-                        placeholder="e.g., Savings, Trading, DeFi"
-                        value={newWalletLabel}
-                        onChange={(e) => setNewWalletLabel(e.target.value)}
-                        className="mt-2"
-                        data-testid="input-wallet-label"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label>Wallet Type</Label>
-                      <RadioGroup 
-                        value={walletCreationType} 
+        {/* Main Content with Left Sidebar */}
+        <div className="flex mt-4">
+          {/* Left Chain Sidebar */}
+          <div className="w-16 flex flex-col items-center gap-2 py-4 border-r border-slate-700">
+            <button
+              onClick={() => setSelectedChainForList(null)}
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                selectedChainForList === null ? 'bg-orange-500' : 'bg-slate-700 hover:bg-slate-600'
+              }`}
+              title="All Assets"
+            >
+              <Wallet className="h-5 w-5" />
+            </button>
+            {enabledChains.slice(0, 8).map((symbol) => {
+              const chain = chains.find(c => c.symbol === symbol);
+              return (
+                <button
+                  key={symbol}
+                  onClick={() => setSelectedChainForList(symbol)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                    selectedChainForList === symbol ? 'bg-orange-500' : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                  title={chain?.name || symbol}
+                >
+                  {chain ? (
+                    <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="sm" />
+                  ) : (
+                    <span className="text-xs font-bold">{symbol.slice(0, 2)}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right Content - Token List */}
+          <div className="flex-1 p-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-slate-400" />
+                <span className="text-slate-400 text-sm">
+                  {selectedChainForList ? selectedChainForList : 'All Assets'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Dialog open={showCreateWalletDialog} onOpenChange={setShowCreateWalletDialog}>
+                  <DialogTrigger asChild>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white" data-testid="button-create-wallet">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create New Wallet</DialogTitle>
+                      <DialogDescription>
+                        Create an additional wallet for your portfolio.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <div>
+                        <Label htmlFor="wallet-label">Wallet Label (optional)</Label>
+                        <Input
+                          id="wallet-label"
+                          placeholder="e.g., Savings, Trading, DeFi"
+                          value={newWalletLabel}
+                          onChange={(e) => setNewWalletLabel(e.target.value)}
+                          className="mt-2"
+                          data-testid="input-wallet-label"
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <Label>Wallet Type</Label>
+                        <RadioGroup 
+                          value={walletCreationType} 
                         onValueChange={(val) => setWalletCreationType(val as "derive" | "new-seed")}
                         className="space-y-2"
                       >
@@ -1008,7 +1043,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          ) : sortedEnabledAssets.length === 0 ? (
+          ) : assetsForSelectedChain.length === 0 ? (
             <div className="text-center py-12">
               <Settings className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">No assets enabled</p>
@@ -1021,7 +1056,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="space-y-2">
-              {sortedEnabledAssets.map((asset) => {
+              {assetsForSelectedChain.map((asset) => {
                 const { wallet, chain } = getWalletForAsset(asset);
                 const parentChain = TOKEN_PARENT_CHAIN[asset.id];
                 const isToken = !!parentChain;
@@ -1115,6 +1150,7 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+    </div>
     );
   }
 
