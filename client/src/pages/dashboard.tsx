@@ -762,6 +762,363 @@ export default function Dashboard() {
     );
   }
 
+  // TokenPocket-style layout for Soft Wallet
+  if (walletMode === "soft_wallet") {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Gradient Hero Section */}
+        <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-cyan-400 text-white">
+          <div className="p-4 md:p-6">
+            {/* Top Bar */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                {availableAccounts.length > 1 ? (
+                  <Select
+                    value={selectedAccountIndex.toString()}
+                    onValueChange={(val) => setSelectedAccountIndex(parseInt(val, 10))}
+                  >
+                    <SelectTrigger className="w-40 bg-white/20 border-white/30 text-white" data-testid="select-account">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableAccounts.map(acc => (
+                        <SelectItem key={acc.index} value={acc.index.toString()} data-testid={`select-account-option-${acc.index}`}>
+                          {acc.label || `Account ${acc.index + 1}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <h1 className="text-lg font-semibold">Soft Wallet</h1>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <WalletModeSelector />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-white hover:bg-white/20"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing || balanceCacheStatus.isRefreshing}
+                  data-testid="button-refresh-portfolio"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshing || balanceCacheStatus.isRefreshing ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
+            </div>
+
+            {/* Portfolio Value */}
+            <div className="text-center py-6">
+              <p className="text-white/70 text-sm mb-2">Total Balance</p>
+              <h2 className="text-4xl md:text-5xl font-bold mb-2" data-testid="text-portfolio-value">
+                {formatUSD(totalUSDValue)}
+              </h2>
+              {balanceCacheStatus.isStale && balanceCacheStatus.lastUpdated && (
+                <p className="text-white/60 text-xs">
+                  Updated {clientStorage.getCacheAge(balanceCacheStatus.lastUpdated)}
+                </p>
+              )}
+              {balanceCacheStatus.isRefreshing && (
+                <p className="text-white/60 text-xs animate-pulse">Refreshing...</p>
+              )}
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex justify-center gap-8 pb-6">
+              <Link href="/transfer?type=receive">
+                <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
+                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                    <ArrowDownLeft className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm">Receive</span>
+                </button>
+              </Link>
+              <Link href="/transfer?type=send">
+                <button className="flex flex-col items-center gap-2 text-white hover:opacity-80 transition-opacity">
+                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                    <ArrowUpRight className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm">Send</span>
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Token List Section */}
+        <div className="p-4 md:p-6">
+          {/* Search and Controls */}
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search tokens..."
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-assets"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Dialog open={showCreateWalletDialog} onOpenChange={setShowCreateWalletDialog}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" data-testid="button-create-wallet">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Wallet</DialogTitle>
+                    <DialogDescription>
+                      Create an additional wallet for your portfolio.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4 space-y-4">
+                    <div>
+                      <Label htmlFor="wallet-label">Wallet Label (optional)</Label>
+                      <Input
+                        id="wallet-label"
+                        placeholder="e.g., Savings, Trading, DeFi"
+                        value={newWalletLabel}
+                        onChange={(e) => setNewWalletLabel(e.target.value)}
+                        className="mt-2"
+                        data-testid="input-wallet-label"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Wallet Type</Label>
+                      <RadioGroup 
+                        value={walletCreationType} 
+                        onValueChange={(val) => setWalletCreationType(val as "derive" | "new-seed")}
+                        className="space-y-2"
+                      >
+                        <div className="flex items-start gap-3 p-3 rounded-md border">
+                          <RadioGroupItem value="derive" id="derive" className="mt-0.5" data-testid="radio-derive" />
+                          <div className="flex-1">
+                            <Label htmlFor="derive" className="font-medium cursor-pointer">Derive from existing seed</Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Uses your main seed phrase with a new account index.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 rounded-md border">
+                          <RadioGroupItem value="new-seed" id="new-seed" className="mt-0.5" data-testid="radio-new-seed" />
+                          <div className="flex-1">
+                            <Label htmlFor="new-seed" className="font-medium cursor-pointer">Generate new seed phrase</Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Creates a completely independent wallet with its own seed phrase.
+                            </p>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                      {walletCreationType === "new-seed" && (
+                        <div className="pt-2">
+                          <Label htmlFor="seed-pin">PIN for new seed (min 4 characters)</Label>
+                          <Input
+                            id="seed-pin"
+                            type="password"
+                            placeholder="Enter PIN to encrypt new seed"
+                            value={seedPinInput}
+                            onChange={(e) => setSeedPinInput(e.target.value)}
+                            className="mt-2"
+                            data-testid="input-seed-pin"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => {
+                      setShowCreateWalletDialog(false);
+                      setWalletCreationType("derive");
+                      setSeedPinInput("");
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateWallet} disabled={isLoading} data-testid="button-confirm-create-wallet">
+                      {isLoading ? "Creating..." : "Create Wallet"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/manage-crypto">
+                  <Settings className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Seed Reveal Dialog */}
+          <Dialog open={showSeedRevealDialog} onOpenChange={(open) => {
+            if (!open && !seedConfirmed) return;
+            setShowSeedRevealDialog(open);
+            if (!open) {
+              setNewSeedPhrase("");
+              setSeedConfirmed(false);
+            }
+          }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Your New Seed Phrase</DialogTitle>
+                <DialogDescription>
+                  Write down these 12 words and store them securely.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="p-4 bg-muted rounded-md font-mono text-sm break-words" data-testid="text-seed-phrase">
+                {newSeedPhrase}
+              </div>
+              <div className="flex items-center gap-2 mt-4">
+                <Checkbox 
+                  id="seed-confirmed" 
+                  checked={seedConfirmed} 
+                  onCheckedChange={(checked) => setSeedConfirmed(!!checked)} 
+                  data-testid="checkbox-seed-confirmed"
+                />
+                <Label htmlFor="seed-confirmed" className="cursor-pointer">I have written down my seed phrase</Label>
+              </div>
+              <DialogFooter>
+                <Button disabled={!seedConfirmed} onClick={() => {
+                  setShowSeedRevealDialog(false);
+                  setNewSeedPhrase("");
+                  setSeedConfirmed(false);
+                  toast({ title: "Wallet Created", description: "New wallet with independent seed created" });
+                }} data-testid="button-seed-done">
+                  Done
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Token List */}
+          {isLoadingAssets ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center gap-4 p-4 rounded-lg bg-card border">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-24 mb-2" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                  <div className="text-right">
+                    <Skeleton className="h-4 w-20 mb-2" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : sortedEnabledAssets.length === 0 ? (
+            <div className="text-center py-12">
+              <Settings className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">No assets enabled</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">
+                Enable assets to track in Manage Crypto
+              </p>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/manage-crypto">Manage Crypto</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sortedEnabledAssets.map((asset) => {
+                const { wallet, chain } = getWalletForAsset(asset);
+                const parentChain = TOKEN_PARENT_CHAIN[asset.id];
+                const isToken = !!parentChain;
+                const displaySymbol = isToken ? asset.symbol.toUpperCase() : chain?.symbol || asset.symbol.toUpperCase();
+                const effectiveBalance = isToken && tokenBalances[asset.id] ? tokenBalances[asset.id] : (wallet ? wallet.balance : "0");
+                const balance = parseFloat(effectiveBalance);
+                const usdValue = balance * (asset.currentPrice || 0);
+
+                return (
+                  <Link key={asset.id} href={wallet && chain ? `/wallet/${chain.id}` : "#"}>
+                    <div 
+                      className="flex items-center gap-4 p-4 rounded-lg bg-card border hover:bg-accent/50 transition-colors cursor-pointer"
+                      data-testid={`token-row-${asset.id}`}
+                    >
+                      {/* Token Icon */}
+                      <div className="relative">
+                        {(asset.image || CRYPTO_ICONS[asset.id]) ? (
+                          <img
+                            src={asset.image || CRYPTO_ICONS[asset.id] || ''}
+                            alt={asset.name}
+                            className="h-10 w-10 rounded-full bg-muted"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : chain ? (
+                          <ChainIcon symbol={chain.symbol} iconColor={chain.iconColor} size="md" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-muted" />
+                        )}
+                      </div>
+
+                      {/* Token Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium truncate">{asset.name}</h3>
+                          <span
+                            className={`text-xs font-medium ${
+                              asset.priceChangePercentage24h >= 0
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-red-600 dark:text-red-400"
+                            }`}
+                          >
+                            {asset.priceChangePercentage24h >= 0 ? "+" : ""}{asset.priceChangePercentage24h.toFixed(1)}%
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {displaySymbol}
+                          {parentChain && <span className="ml-1 opacity-70">on {parentChain}</span>}
+                        </p>
+                      </div>
+
+                      {/* Balance & Value */}
+                      <div className="text-right">
+                        <p className="font-medium" data-testid={`text-value-${asset.id}`}>
+                          {formatUSD(usdValue)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatBalance(effectiveBalance)} {displaySymbol}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+
+              {/* Custom Tokens */}
+              {customTokens.map((token) => {
+                const balance = customTokenBalances[token.id] || "0";
+                return (
+                  <div 
+                    key={token.id} 
+                    className="flex items-center gap-4 p-4 rounded-lg bg-card border"
+                    data-testid={`token-row-custom-${token.id}`}
+                  >
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold">
+                      {token.symbol.slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium truncate">{token.name}</h3>
+                        <Badge variant="outline" className="text-xs">Custom</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{token.symbol} on {token.chainId}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{formatBalance(balance, 4)} {token.symbol}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Original card-based layout for Hard Wallet mode
   return (
     <div className="p-4 md:p-6">
       <div className="mb-4 md:mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -793,7 +1150,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <p className="text-xs md:text-sm text-muted-foreground">
-                {walletMode === "soft_wallet" ? "Soft Wallet" : "Hard Wallet"} Portfolio
+                Hard Wallet Portfolio
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -856,50 +1213,6 @@ export default function Dashboard() {
                     />
                   </div>
                   
-                  {walletMode === "soft_wallet" && (
-                    <div className="space-y-3">
-                      <Label>Wallet Type</Label>
-                      <RadioGroup 
-                        value={walletCreationType} 
-                        onValueChange={(val) => setWalletCreationType(val as "derive" | "new-seed")}
-                        className="space-y-2"
-                      >
-                        <div className="flex items-start gap-3 p-3 rounded-md border">
-                          <RadioGroupItem value="derive" id="derive" className="mt-0.5" data-testid="radio-derive" />
-                          <div className="flex-1">
-                            <Label htmlFor="derive" className="font-medium cursor-pointer">Derive from existing seed</Label>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Uses your main seed phrase with a new account index. Same recovery phrase backs up all derived wallets.
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 rounded-md border">
-                          <RadioGroupItem value="new-seed" id="new-seed" className="mt-0.5" data-testid="radio-new-seed" />
-                          <div className="flex-1">
-                            <Label htmlFor="new-seed" className="font-medium cursor-pointer">Generate new seed phrase</Label>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Creates a completely independent wallet with its own seed phrase. Requires a separate PIN to unlock.
-                            </p>
-                          </div>
-                        </div>
-                      </RadioGroup>
-                      
-                      {walletCreationType === "new-seed" && (
-                        <div className="pt-2">
-                          <Label htmlFor="seed-pin">PIN for new seed (min 4 characters)</Label>
-                          <Input
-                            id="seed-pin"
-                            type="password"
-                            placeholder="Enter PIN to encrypt new seed"
-                            value={seedPinInput}
-                            onChange={(e) => setSeedPinInput(e.target.value)}
-                            className="mt-2"
-                            data-testid="input-seed-pin"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => {
