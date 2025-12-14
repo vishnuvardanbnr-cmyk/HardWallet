@@ -734,6 +734,13 @@ export default function Dashboard() {
       return chainSymbol === selectedChainForList;
     });
   }, [sortedEnabledAssets, selectedChainForList]);
+
+  // Auto-select first chain when enabledChains changes and no chain is selected
+  useEffect(() => {
+    if (enabledChains.length > 0 && selectedChainForList === null) {
+      setSelectedChainForList(enabledChains[0]);
+    }
+  }, [enabledChains, selectedChainForList]);
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -855,15 +862,6 @@ export default function Dashboard() {
         <div className="flex mt-4">
           {/* Left Chain Sidebar */}
           <div className="w-16 flex flex-col items-center gap-2 py-4 border-r">
-            <button
-              onClick={() => setSelectedChainForList(null)}
-              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                selectedChainForList === null ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent'
-              }`}
-              title="All Assets"
-            >
-              <Wallet className="h-5 w-5" />
-            </button>
             {enabledChains.slice(0, 8).map((symbol) => {
               const chain = chains.find(c => c.symbol === symbol);
               return (
