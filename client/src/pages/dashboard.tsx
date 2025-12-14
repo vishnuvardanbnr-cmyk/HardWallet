@@ -276,10 +276,9 @@ interface CombinedAssetCardProps {
   chain?: Chain;
   prices: PriceData;
   tokenBalance?: string;
-  onOpenWalletDetail?: (wallet: WalletType, chain: Chain) => void;
 }
 
-function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance, onOpenWalletDetail }: CombinedAssetCardProps) {
+function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance }: CombinedAssetCardProps) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const hasWallet = wallet && chain;
@@ -497,11 +496,11 @@ function CombinedAssetCard({ asset, wallet, chain, prices, tokenBalance, onOpenW
     </Card>
   );
 
-  if (hasWallet && onOpenWalletDetail) {
+  if (hasWallet) {
     return (
-      <div onClick={() => onOpenWalletDetail(wallet, chain)}>
+      <Link href={`/wallet/${chain.id}?asset=${asset.id}`}>
         {cardContent}
-      </div>
+      </Link>
     );
   }
 
@@ -1168,137 +1167,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Wallet List Sheet - TokenPocket Style Dark Popup */}
-      <Sheet open={walletDetailOpen} onOpenChange={setWalletDetailOpen}>
-        <SheetContent 
-          side="bottom" 
-          className="h-[70vh] rounded-t-3xl p-0 bg-zinc-900 border-zinc-800"
-        >
-          <SheetTitle className="sr-only">Wallet List</SheetTitle>
-          {selectedWalletChain && (
-            <div className="h-full flex flex-col">
-              {/* Header - Search, Title, Close */}
-              <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-800">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                >
-                  <Search className="h-5 w-5" />
-                </Button>
-                <span className="text-white font-medium text-lg">Wallet List</span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                  onClick={() => setWalletDetailOpen(false)}
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-
-              {/* Wallet List Content */}
-              <div className="flex-1 overflow-auto px-4 py-4">
-                {/* Chain Section Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white font-medium">{selectedWalletChain.chain.name}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full border border-zinc-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Wallet Card - Selected/Highlighted */}
-                <div 
-                  className="bg-orange-500 rounded-xl p-4 cursor-pointer"
-                  onClick={() => {
-                    setWalletDetailOpen(false);
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium">
-                        {selectedWalletChain.wallet.label || `${selectedWalletChain.chain.symbol}-HD`}
-                      </span>
-                      <span className="px-1.5 py-0.5 bg-white/20 rounded text-xs text-white font-medium">
-                        HD
-                      </span>
-                    </div>
-                    <span className="text-white font-medium">
-                      {formatBalance(selectedWalletChain.wallet.balance)} {selectedWalletChain.chain.symbol}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-white/70 text-sm font-mono">
-                      {truncateAddress(selectedWalletChain.wallet.address)}
-                    </span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-5 w-5 text-white/70 hover:text-white hover:bg-white/10"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(selectedWalletChain.wallet.address);
-                        toast({ title: "Copied", description: "Address copied to clipboard" });
-                      }}
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Other wallets on this chain would go here */}
-                {wallets
-                  .filter(w => w.chainId === selectedWalletChain.chain.id && w.address !== selectedWalletChain.wallet.address)
-                  .map(wallet => (
-                    <div 
-                      key={wallet.id}
-                      className="bg-zinc-800 rounded-xl p-4 mt-2 cursor-pointer hover:bg-zinc-700 transition-colors"
-                      onClick={() => {
-                        setSelectedWalletChain({ wallet, chain: selectedWalletChain.chain });
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-medium">
-                            {wallet.label || `${selectedWalletChain.chain.symbol}-HD`}
-                          </span>
-                          <span className="px-1.5 py-0.5 bg-zinc-700 rounded text-xs text-zinc-300 font-medium">
-                            HD
-                          </span>
-                        </div>
-                        <span className="text-white font-medium">
-                          {formatBalance(wallet.balance)} {selectedWalletChain.chain.symbol}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-zinc-400 text-sm font-mono">
-                          {truncateAddress(wallet.address)}
-                        </span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(wallet.address);
-                            toast({ title: "Copied", description: "Address copied to clipboard" });
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                }
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
     );
   }
@@ -1524,10 +1392,6 @@ export default function Dashboard() {
                   chain={chain}
                   prices={prices}
                   tokenBalance={tokenBalances[asset.id]}
-                  onOpenWalletDetail={(w, c) => {
-                    setSelectedWalletChain({ wallet: w, chain: c });
-                    setWalletDetailOpen(true);
-                  }}
                 />
               );
             })}
