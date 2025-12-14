@@ -380,8 +380,12 @@ async function getEvmTokenBalance(walletAddress: string, contractAddress: string
 
 // CoinGecko ID to token key mapping
 const COINGECKO_TO_TOKEN_KEY: Record<string, { evmKey?: string; tronKey?: string; parentChainSymbol: string }> = {
-  'tether': { evmKey: 'usdt-eth', tronKey: 'usdt-tron', parentChainSymbol: 'ETH' },
-  'usd-coin': { evmKey: 'usdc-eth', tronKey: 'usdc-tron', parentChainSymbol: 'ETH' },
+  'tether': { evmKey: 'usdt-eth', parentChainSymbol: 'ETH' },
+  'tether-bsc': { evmKey: 'usdt-bsc', parentChainSymbol: 'BNB' },
+  'tether-tron': { tronKey: 'usdt-tron', parentChainSymbol: 'TRX' },
+  'usd-coin': { evmKey: 'usdc-eth', parentChainSymbol: 'ETH' },
+  'usd-coin-bsc': { evmKey: 'usdc-bsc', parentChainSymbol: 'BNB' },
+  'usd-coin-tron': { tronKey: 'usdc-tron', parentChainSymbol: 'TRX' },
   'wrapped-bitcoin': { evmKey: 'wbtc-eth', parentChainSymbol: 'ETH' },
   'chainlink': { evmKey: 'link-eth', parentChainSymbol: 'ETH' },
   'uniswap': { evmKey: 'uni-eth', parentChainSymbol: 'ETH' },

@@ -79,7 +79,11 @@ const COINGECKO_ID_TO_CHAIN_SYMBOL: Record<string, string> = {
   'osmosis': 'OSMO',
   // ERC-20 tokens on Ethereum
   'tether': 'ETH',
+  'tether-bsc': 'BNB',
+  'tether-tron': 'TRX',
   'usd-coin': 'ETH',
+  'usd-coin-bsc': 'BNB',
+  'usd-coin-tron': 'TRX',
   'staked-ether': 'ETH',
   'chainlink': 'ETH',
   'wrapped-bitcoin': 'ETH',
@@ -156,7 +160,11 @@ const COINGECKO_ID_TO_CHAIN_SYMBOL: Record<string, string> = {
 
 const TOKEN_PARENT_CHAIN: Record<string, string> = {
   'tether': 'Ethereum',
+  'tether-bsc': 'BNB Chain',
+  'tether-tron': 'TRON',
   'usd-coin': 'Ethereum',
+  'usd-coin-bsc': 'BNB Chain',
+  'usd-coin-tron': 'TRON',
   'staked-ether': 'Ethereum',
   'chainlink': 'Ethereum',
   'wrapped-bitcoin': 'Ethereum',
