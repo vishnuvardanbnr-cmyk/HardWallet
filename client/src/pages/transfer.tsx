@@ -369,11 +369,11 @@ export default function Transfer() {
             </TabsList>
 
             <TabsContent value="send">
-              <SendTab chains={chains} wallets={wallets} initialChainId={chainParam} />
+              <SendTab key={`send-${chainParam}`} chains={chains} wallets={wallets} initialChainId={chainParam} />
             </TabsContent>
 
             <TabsContent value="receive">
-              <ReceiveTab chains={chains} wallets={wallets} initialChainId={chainParam} />
+              <ReceiveTab key={`receive-${chainParam}`} chains={chains} wallets={wallets} initialChainId={chainParam} />
             </TabsContent>
           </Tabs>
         </CardContent>
