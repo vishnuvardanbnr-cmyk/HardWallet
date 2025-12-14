@@ -24,6 +24,7 @@ export function PinModal() {
     pendingTransaction,
     setPendingTransaction,
     disconnectDevice,
+    refreshBalances,
   } = useWallet();
   const { toast } = useToast();
   
@@ -130,12 +131,18 @@ export function PinModal() {
                   title: "Transaction Sent",
                   description: `Transaction broadcast successfully. Hash: ${result.txHash?.slice(0, 10)}...`,
                 });
+                
+                // Refresh balances after successful transaction
+                refreshBalances();
               } else {
                 toast({
                   title: "Broadcast Failed",
                   description: result.error || "Failed to broadcast transaction",
                   variant: "destructive",
                 });
+                
+                // Refresh balances after failed transaction to show current state
+                refreshBalances();
               }
             } else {
               toast({
@@ -143,6 +150,9 @@ export function PinModal() {
                 description: "Could not sign the transaction",
                 variant: "destructive",
               });
+              
+              // Refresh balances after signing failure
+              refreshBalances();
             }
             setPendingTransaction(null);
           } else {
@@ -165,7 +175,7 @@ export function PinModal() {
         setIsLoading(false);
       }
     }
-  }, [pinAction, pin, unlockWallet, deriveWallets, pendingTransaction, setPendingTransaction, setShowPinModal, setPinAction, toast]);
+  }, [pinAction, pin, unlockWallet, deriveWallets, pendingTransaction, setPendingTransaction, setShowPinModal, setPinAction, toast, refreshBalances]);
 
   useEffect(() => {
     if ((pinAction === "unlock" || pinAction === "sign") && pin.length === maxLength) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { 
@@ -374,7 +374,10 @@ function ReceiveTab({ chains, wallets, initialChainId }: { chains: Chain[]; wall
 }
 
 export default function Transfer() {
-  const { isConnected, isUnlocked, chains, wallets } = useWallet();
+  const { isConnected, isUnlocked, chains, wallets, visibleWallets, walletMode, refreshBalances } = useWallet();
+  
+  // Use visibleWallets for hard wallet mode to ensure proper data display
+  const displayWallets = walletMode === "hard_wallet" ? visibleWallets : wallets;
   
   // Track URL search string reactively using window events
   const [searchString, setSearchString] = useState(() => window.location.search);
@@ -424,7 +427,18 @@ export default function Transfer() {
   
   console.log("[Transfer] chainParam:", chainParam, "search:", searchString);
 
-  if (wallets.length === 0) {
+  // Track if we've already refreshed balances on this page load
+  const hasRefreshedRef = useRef(false);
+  
+  // Refresh balances once when page loads in hard wallet mode
+  useEffect(() => {
+    if (walletMode === "hard_wallet" && displayWallets.length > 0 && !hasRefreshedRef.current) {
+      hasRefreshedRef.current = true;
+      refreshBalances();
+    }
+  }, [walletMode, displayWallets.length, refreshBalances]);
+
+  if (displayWallets.length === 0) {
     return (
       <div className="p-6">
         <h1 className="mb-6 text-3xl font-bold">Send / Receive</h1>
@@ -452,11 +466,11 @@ export default function Transfer() {
             </TabsList>
 
             <TabsContent value="send">
-              <SendTab key={`send-${chainParam}`} chains={chains} wallets={wallets} initialChainId={chainParam} />
+              <SendTab key={`send-${chainParam}`} chains={chains} wallets={displayWallets} initialChainId={chainParam} />
             </TabsContent>
 
             <TabsContent value="receive">
-              <ReceiveTab key={`receive-${chainParam}`} chains={chains} wallets={wallets} initialChainId={chainParam} />
+              <ReceiveTab key={`receive-${chainParam}`} chains={chains} wallets={displayWallets} initialChainId={chainParam} />
             </TabsContent>
           </Tabs>
         </CardContent>

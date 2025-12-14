@@ -522,6 +522,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [walletMode, hardwareState.status, softWalletState.status]);
 
   const fetchedWalletIdsRef = useRef<Set<string>>(new Set());
+  const isRefreshingRef = useRef<boolean>(false);
   
   // Reset fetched wallet IDs when wallet mode changes
   useEffect(() => {
@@ -529,6 +530,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [walletMode]);
   
   useEffect(() => {
+    // Skip automatic fetch if refreshBalances is in progress
+    if (isRefreshingRef.current) return;
+    
     if (wallets.length === 0) {
       fetchedWalletIdsRef.current = new Set();
       return;
@@ -589,6 +593,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [walletMode, softWallets, hardWallets, hardwareState.status]);
 
+  // Track last hard wallet connection status for triggering balance refresh
+  const lastHardConnectedRef = useRef<boolean>(false);
+  
   // Sync wallets array from modeBasedWallets when hard wallet connects or mode changes
   // This ensures the wallets array is populated for components that depend on it
   useEffect(() => {
@@ -596,9 +603,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     
     if (walletMode === "hard_wallet") {
       const hardConnected = hardwareState.status === "connected" || hardwareState.status === "unlocked";
-      if (hardConnected && hardWallets.length > 0 && wallets.length === 0) {
-        setWallets(hardWallets);
+      
+      // Detect when hard wallet just connected (transition from not connected to connected)
+      const justConnected = hardConnected && !lastHardConnectedRef.current;
+      lastHardConnectedRef.current = hardConnected;
+      
+      if (hardConnected && hardWallets.length > 0) {
+        // Clear the fetched wallet IDs ref so balances get fetched fresh
+        // This happens on initial sync OR when hard wallet reconnects
+        if (wallets.length === 0 || justConnected) {
+          fetchedWalletIdsRef.current = new Set();
+          // Clone hardWallets to ensure React detects the state change
+          setWallets([...hardWallets]);
+        }
       }
+    } else {
+      // Reset the ref when switching away from hard wallet mode
+      lastHardConnectedRef.current = false;
     }
   }, [walletMode, hardwareState.status, hardWallets, wallets.length]);
 
@@ -968,81 +989,81 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [chains, selectedChainId, storageInitialized, walletMode]);
 
   const refreshBalances = useCallback(async () => {
-    setWallets(prevWallets => {
-      if (prevWallets.length === 0) return prevWallets;
+    // Set refreshing flag to prevent automatic effect from interfering
+    isRefreshingRef.current = true;
+    // Clear the fetched wallet IDs ref to force fresh balance fetches
+    fetchedWalletIdsRef.current = new Set();
+    
+    try {
+      // Get current wallets synchronously
+      const currentWallets = walletMode === "soft_wallet" ? softWallets : hardWallets;
       
-      (async () => {
-        try {
-          const updatedWallets = await Promise.all(
-            prevWallets.map(async (wallet) => {
-              const chain = chains.find(c => c.id === wallet.chainId);
-              if (!chain) {
-                return wallet;
-              }
-              
-              try {
-                // Pass custom RPC URL for custom chains (non-default chains have rpcUrl set)
-                const customRpcUrl = !chain.isDefault && chain.rpcUrl ? chain.rpcUrl : undefined;
-                const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol, customRpcUrl);
-                return { ...wallet, balance };
-              } catch (err) {
-                console.error(`Failed to fetch balance for ${wallet.address}:`, err);
-                return wallet;
-              }
-            })
-          );
+      if (currentWallets.length === 0 || chains.length === 0) {
+        // Early exit but flag will be cleared in finally block
+        return;
+      }
+      
+      const updatedWallets = await Promise.all(
+        currentWallets.map(async (wallet) => {
+          const chain = chains.find(c => c.id === wallet.chainId);
+          if (!chain) {
+            return wallet;
+          }
           
-          setWallets(currentWallets => {
-            const currentIds = new Set(currentWallets.map(w => w.id));
-            const updatedIds = new Set(updatedWallets.map(w => w.id));
-            
-            const merged = updatedWallets.map(w => {
-              if (currentIds.has(w.id)) {
-                return w;
-              }
-              return w;
-            });
-            
-            const newWalletsNotInUpdate = currentWallets.filter(w => !updatedIds.has(w.id));
-            const finalWallets = [...merged, ...newWalletsNotInUpdate];
-            
-            if (storageInitialized) {
-              const storedWalletsForMode: StoredWallet[] = finalWallets.map(w => {
-                const chain = chains.find(c => c.id === w.chainId);
-                return {
-                  id: w.id,
-                  address: w.address,
-                  chainId: w.chainId,
-                  chainName: chain?.name || "",
-                  chainSymbol: chain?.symbol || "",
-                  balance: w.balance,
-                  path: "m/44'/60'/0'/0/0",
-                  lastUpdated: new Date().toISOString(),
-                  accountIndex: w.accountIndex ?? 0,
-                  label: w.label,
-                  walletGroupId: w.walletGroupId,
-                };
-              });
-              
-              if (walletMode === "soft_wallet") {
-                clientStorage.saveSoftWalletData(storedWalletsForMode);
-                setSoftWallets(finalWallets);
-              } else {
-                clientStorage.saveHardWalletData(storedWalletsForMode);
-                setHardWallets(finalWallets);
-              }
-            }
-            
-            return finalWallets;
-          });
-        } catch (err: any) {
-          console.error("Failed to refresh balances:", err);
-        }
-      })();
+          try {
+            // Pass custom RPC URL for custom chains (non-default chains have rpcUrl set)
+            const customRpcUrl = !chain.isDefault && chain.rpcUrl ? chain.rpcUrl : undefined;
+            const balance = await getUniversalBalance(wallet.address, chain.chainId, chain.symbol, customRpcUrl);
+            return { ...wallet, balance };
+          } catch (err) {
+            console.error(`Failed to fetch balance for ${wallet.address}:`, err);
+            return wallet;
+          }
+        })
+      );
       
-      return prevWallets;
-    });
-  }, [chains, storageInitialized, walletMode]);
+      // Update wallets state with new balances
+      setWallets([...updatedWallets]);
+      
+      // Also update mode-specific wallet arrays
+      if (walletMode === "soft_wallet") {
+        setSoftWallets([...updatedWallets]);
+      } else {
+        setHardWallets([...updatedWallets]);
+      }
+      
+      // Persist to storage
+      if (storageInitialized) {
+        const storedWalletsForMode: StoredWallet[] = updatedWallets.map(w => {
+          const chain = chains.find(c => c.id === w.chainId);
+          return {
+            id: w.id,
+            address: w.address,
+            chainId: w.chainId,
+            chainName: chain?.name || "",
+            chainSymbol: chain?.symbol || "",
+            balance: w.balance,
+            path: "m/44'/60'/0'/0/0",
+            lastUpdated: new Date().toISOString(),
+            accountIndex: w.accountIndex ?? 0,
+            label: w.label,
+            walletGroupId: w.walletGroupId,
+          };
+        });
+        
+        if (walletMode === "soft_wallet") {
+          await clientStorage.saveSoftWalletData(storedWalletsForMode);
+        } else {
+          await clientStorage.saveHardWalletData(storedWalletsForMode);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to refresh balances:", err);
+    } finally {
+      // Always clear refreshing flag
+      isRefreshingRef.current = false;
+    }
+  }, [chains, storageInitialized, walletMode, softWallets, hardWallets]);
 
   const refreshTransactions = useCallback(async () => {
     if (wallets.length === 0 || chains.length === 0) return;
