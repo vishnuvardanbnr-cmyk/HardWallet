@@ -18,6 +18,7 @@ export function PinModal() {
     pinAction, 
     setPinAction,
     hardwareState,
+    walletMode,
     unlockWallet,
     deriveWallets,
     pendingTransaction,
@@ -238,9 +239,14 @@ export function PinModal() {
           </DialogDescription>
         </DialogHeader>
 
-        {hardwareState.deviceName && (
+        {walletMode === "hard_wallet" && hardwareState.deviceName && (
           <div className="text-center text-sm text-muted-foreground">
             Device: {hardwareState.deviceName}
+          </div>
+        )}
+        {walletMode === "soft_wallet" && (
+          <div className="text-center text-sm text-muted-foreground">
+            Soft Wallet
           </div>
         )}
 
@@ -332,7 +338,7 @@ export function PinModal() {
           <span>Secured by hardware encryption</span>
         </div>
 
-        {hardwareState.type === "raspberry_pi" && (
+        {walletMode === "hard_wallet" && hardwareState.type === "raspberry_pi" && (
           <div className="mt-2 text-center">
             <p className="text-xs text-muted-foreground mb-2">
               Existing wallet detected on device
