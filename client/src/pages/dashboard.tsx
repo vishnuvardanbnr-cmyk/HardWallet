@@ -787,9 +787,9 @@ export default function Dashboard() {
   // TokenPocket-style layout for Soft Wallet
   if (walletMode === "soft_wallet") {
     return (
-      <div className="min-h-screen bg-slate-900 text-white">
-        {/* Dark Header with Balance */}
-        <div className="bg-slate-800 rounded-xl mx-4 mt-4 p-4">
+      <div className="min-h-screen bg-background">
+        {/* Header with Balance */}
+        <div className="bg-card border rounded-xl mx-4 mt-4 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               {availableAccounts.length > 1 ? (
@@ -797,7 +797,7 @@ export default function Dashboard() {
                   value={selectedAccountIndex.toString()}
                   onValueChange={(val) => setSelectedAccountIndex(parseInt(val, 10))}
                 >
-                  <SelectTrigger className="w-32 bg-slate-700 border-slate-600 text-white text-sm" data-testid="select-account">
+                  <SelectTrigger className="w-32 text-sm" data-testid="select-account">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -809,12 +809,12 @@ export default function Dashboard() {
                   </SelectContent>
                 </Select>
               ) : (
-                <span className="text-slate-400 text-sm font-mono">Wallet</span>
+                <span className="text-muted-foreground text-sm font-mono">Wallet</span>
               )}
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6 text-slate-400 hover:text-white"
+                className="h-6 w-6"
                 onClick={handleRefresh}
                 disabled={isRefreshing || balanceCacheStatus.isRefreshing}
                 data-testid="button-refresh-portfolio"
@@ -830,20 +830,20 @@ export default function Dashboard() {
               {formatUSD(totalUSDValue)}
             </h2>
             {balanceCacheStatus.isRefreshing && (
-              <span className="text-xs text-slate-400 animate-pulse">...</span>
+              <span className="text-xs text-muted-foreground animate-pulse">...</span>
             )}
           </div>
 
           {/* Send/Receive Buttons */}
           <div className="flex gap-3">
             <Link href="/transfer?type=send" className="flex-1">
-              <Button variant="outline" className="w-full bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+              <Button variant="outline" className="w-full">
                 <ArrowUpRight className="h-4 w-4 mr-2" />
                 Send
               </Button>
             </Link>
             <Link href="/transfer?type=receive" className="flex-1">
-              <Button variant="outline" className="w-full bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+              <Button variant="outline" className="w-full">
                 <ArrowDownLeft className="h-4 w-4 mr-2" />
                 Receive
               </Button>
@@ -854,11 +854,11 @@ export default function Dashboard() {
         {/* Main Content with Left Sidebar */}
         <div className="flex mt-4">
           {/* Left Chain Sidebar */}
-          <div className="w-16 flex flex-col items-center gap-2 py-4 border-r border-slate-700">
+          <div className="w-16 flex flex-col items-center gap-2 py-4 border-r">
             <button
               onClick={() => setSelectedChainForList(null)}
               className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                selectedChainForList === null ? 'bg-orange-500' : 'bg-slate-700 hover:bg-slate-600'
+                selectedChainForList === null ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent'
               }`}
               title="All Assets"
             >
@@ -871,7 +871,7 @@ export default function Dashboard() {
                   key={symbol}
                   onClick={() => setSelectedChainForList(symbol)}
                   className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                    selectedChainForList === symbol ? 'bg-orange-500' : 'bg-slate-700 hover:bg-slate-600'
+                    selectedChainForList === symbol ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-accent'
                   }`}
                   title={chain?.name || symbol}
                 >
@@ -890,15 +890,15 @@ export default function Dashboard() {
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-slate-400" />
-                <span className="text-slate-400 text-sm">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground text-sm">
                   {selectedChainForList ? selectedChainForList : 'All Assets'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Dialog open={showCreateWalletDialog} onOpenChange={setShowCreateWalletDialog}>
                   <DialogTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white" data-testid="button-create-wallet">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="button-create-wallet">
                       <Plus className="h-4 w-4" />
                     </Button>
                   </DialogTrigger>
