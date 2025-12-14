@@ -187,6 +187,7 @@ function SendTab({ chains, wallets, initialChainId }: { chains: Chain[]; wallets
         <div className="flex items-center justify-between">
           <Label htmlFor="amount">Amount</Label>
           <Button 
+            type="button"
             variant="ghost" 
             size="sm" 
             className="h-auto py-0 text-xs"
@@ -260,6 +261,7 @@ function SendTab({ chains, wallets, initialChainId }: { chains: Chain[]; wallets
       </div>
 
       <Button 
+        type="button"
         className="w-full" 
         size="lg"
         onClick={handleSend}
@@ -352,7 +354,7 @@ function ReceiveTab({ chains, wallets, initialChainId }: { chains: Chain[]; wall
             </div>
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={copyAddress} data-testid="button-copy-receive-address">
+              <Button type="button" variant="outline" onClick={copyAddress} data-testid="button-copy-receive-address">
                 <Copy className="mr-2 h-4 w-4" />
                 Copy Address
               </Button>
