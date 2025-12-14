@@ -43,15 +43,15 @@ const ASSET_INFO: Record<string, { name: string; symbol: string; image?: string 
   'osmosis': { name: 'Osmosis', symbol: 'OSMO', image: 'https://assets.coingecko.com/coins/images/16724/small/osmo.png' },
 };
 
-const ERC20_TOKENS = new Set([
-  'tether',
-  'usd-coin',
-  'staked-ether',
-  'chainlink',
-  'wrapped-bitcoin',
-  'uniswap',
-  'shiba-inu',
-]);
+const TOKEN_PARENT_CHAIN: Record<string, string> = {
+  'tether': 'Ethereum',
+  'usd-coin': 'Ethereum',
+  'staked-ether': 'Ethereum',
+  'chainlink': 'Ethereum',
+  'wrapped-bitcoin': 'Ethereum',
+  'uniswap': 'Ethereum',
+  'shiba-inu': 'Ethereum',
+};
 
 function formatBalance(balance: string): string {
   const num = parseFloat(balance);
@@ -221,7 +221,7 @@ export default function WalletDetail() {
             <h1 className="text-2xl font-bold">{displayName}</h1>
             <p className="text-sm text-muted-foreground">
               {displaySymbol}
-              {assetId && ERC20_TOKENS.has(assetId) && <span className="ml-1 opacity-70">on Ethereum</span>}
+              {assetId && TOKEN_PARENT_CHAIN[assetId] && <span className="ml-1 opacity-70">on {TOKEN_PARENT_CHAIN[assetId]}</span>}
             </p>
           </div>
         </div>

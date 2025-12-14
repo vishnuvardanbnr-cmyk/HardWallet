@@ -86,15 +86,15 @@ const COINGECKO_ID_TO_CHAIN_SYMBOL: Record<string, string> = {
   'shiba-inu': 'ETH',
 };
 
-const ERC20_TOKENS = new Set([
-  'tether',
-  'usd-coin',
-  'staked-ether',
-  'chainlink',
-  'wrapped-bitcoin',
-  'uniswap',
-  'shiba-inu',
-]);
+const TOKEN_PARENT_CHAIN: Record<string, string> = {
+  'tether': 'Ethereum',
+  'usd-coin': 'Ethereum',
+  'staked-ether': 'Ethereum',
+  'chainlink': 'Ethereum',
+  'wrapped-bitcoin': 'Ethereum',
+  'uniswap': 'Ethereum',
+  'shiba-inu': 'Ethereum',
+};
 
 const CRYPTO_ICONS: Record<string, string> = {
   'bitcoin': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
@@ -132,8 +132,9 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
   const { toast } = useToast();
   const hasWallet = wallet && chain;
   
-  const isErc20Token = ERC20_TOKENS.has(asset.id);
-  const displaySymbol = isErc20Token ? asset.symbol.toUpperCase() : chain?.symbol || asset.symbol.toUpperCase();
+  const parentChain = TOKEN_PARENT_CHAIN[asset.id];
+  const isToken = !!parentChain;
+  const displaySymbol = isToken ? asset.symbol.toUpperCase() : chain?.symbol || asset.symbol.toUpperCase();
   
   const balance = hasWallet ? parseFloat(wallet.balance) : 0;
   const usdValue = hasWallet ? calculateUSDValue(wallet.balance, chain.symbol, prices) : 0;
@@ -189,7 +190,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
               </div>
               <p className="text-xs text-muted-foreground">
                 {asset.symbol.toUpperCase()}
-                {isErc20Token && <span className="ml-1 opacity-70">on Ethereum</span>}
+                {parentChain && <span className="ml-1 opacity-70">on {parentChain}</span>}
               </p>
             </div>
           </div>
@@ -223,7 +224,7 @@ function CombinedAssetCard({ asset, wallet, chain, prices }: CombinedAssetCardPr
                 <h3 className="font-semibold truncate">{asset.name}</h3>
                 <p className="text-sm text-muted-foreground">
                   {asset.symbol.toUpperCase()}
-                  {isErc20Token && <span className="ml-1 opacity-70">on Ethereum</span>}
+                  {parentChain && <span className="ml-1 opacity-70">on {parentChain}</span>}
                 </p>
               </div>
             </div>
