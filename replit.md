@@ -57,6 +57,12 @@ Preferred communication style: Simple, everyday language.
 - Security-focused aesthetic with professional, clean visuals
 
 ## Recent Changes
+- **Hard Wallet Balance Fetching Fix** (Dec 2024): Fixed issues where hard wallet balances weren't fetching immediately:
+  - Added isRefreshingRef flag to prevent duplicate balance fetch attempts
+  - Added lastHardConnectedRef to detect device connection transitions and trigger balance refresh
+  - Refactored refreshBalances with proper async/await and finally block for cleanup
+  - Transfer page now uses displayWallets for hard wallet mode with one-time refresh on load
+  - PIN modal now calls refreshBalances after transaction success, broadcast failure, and signing failure
 - **Hard Wallet Navigation Fix** (Dec 2024): Fixed "Wallet Not Found" error and missing price/holdings when in hard wallet mode:
   - Updated wallet-detail page to use mode-aware wallet list instead of generic wallets array
   - Added sync effect to populate wallets array when hard wallet connects
